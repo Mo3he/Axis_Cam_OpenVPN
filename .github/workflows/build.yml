@@ -23,12 +23,18 @@ jobs:
 
       # Cross-compiling the OpenVPN3 core is a single large translation unit;
       # give the compiler more headroom via swap to avoid OOM on the runner.
-      - name: Add swap
+      # Best-effort: the runner's default /swapfile is in use, so add our own
+      # on /mnt (which has plenty of free space). Never fail the build on this.
+      - name: Increase swap
+        continue-on-error: true
         run: |
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile || true
+          sudo fallocate -l 12G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=12288
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
 
       # Builds the openvpn3-base image and the .eap for both architectures.
       - name: Build (aarch64 + armv7hf)
