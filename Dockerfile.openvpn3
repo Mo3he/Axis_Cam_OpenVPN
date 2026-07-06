@@ -1,0 +1,81 @@
+# Pre-built OpenVPN3 source + deps base image for Axis ACAP 11+ (aarch64 / armv7hf).
+#
+# This image only PREPARES the cross-compile environment: it clones the OpenVPN3
+# core and asio, builds a static lz4, and writes the cmake cross toolchain. The
+# actual probe binary is compiled in the app Dockerfile (FROM this image),
+# because the OpenVPN3 core cannot be built as a standalone static library (its
+# sources depend on per-target compile defines), so it must be compiled together
+# with our probe target.
+#
+# Build once, reuse on every app rebuild (only rebuilt when the pinned versions
+# below change):
+#
+#   podman build --build-arg ARCH=aarch64 -t openvpn3-base-aarch64 -f Dockerfile.openvpn3 .
+
+ARG ARCH=aarch64
+ARG VERSION=1.15.1
+ARG UBUNTU_VERSION=22.04
+ARG REPO=docker.io/axisecp
+ARG SDK=acap-native-sdk
+
+FROM ${REPO}/${SDK}:${VERSION}-${ARCH}-ubuntu${UBUNTU_VERSION}
+
+# Host build tools for cross-compiling
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    cmake git ca-certificates pkg-config python3 patch && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── fetch sources (pinned) ─────────────────────────────────────────────────
+ARG OPENVPN3_VERSION=release/3.11
+ARG ASIO_VERSION=asio-1-30-2
+ARG LZ4_VERSION=v1.9.4
+
+WORKDIR /src
+RUN git clone --depth 1 --branch ${OPENVPN3_VERSION} \
+        https://github.com/OpenVPN/openvpn3.git openvpn3 && \
+    git clone --depth 1 --branch ${ASIO_VERSION} \
+        https://github.com/chriskohlhoff/asio.git deps/asio && \
+    git clone --depth 1 --branch ${LZ4_VERSION} \
+        https://github.com/lz4/lz4.git deps/lz4
+
+# ── cross-compile lz4 (static) ────────────────────────────────────────────
+ARG ARCH
+RUN . /opt/axis/acapsdk/environment-setup* && \
+    make -C /src/deps/lz4/lib CC="${CC}" AR="${AR}" liblz4.a && \
+    mkdir -p /opt/ovpn3-deps/lib /opt/ovpn3-deps/include && \
+    cp /src/deps/lz4/lib/liblz4.a /opt/ovpn3-deps/lib/ && \
+    cp /src/deps/lz4/lib/lz4.h /src/deps/lz4/lib/lz4hc.h \
+       /src/deps/lz4/lib/lz4frame.h /opt/ovpn3-deps/include/
+
+# ── cmake cross toolchain file (stable path for the app stage) ─────────────
+# Capture the ACAP SDK's FULL compiler invocation (binary + flags incl.
+# --sysroot) and CFLAGS/CXXFLAGS/LDFLAGS, so the cmake build links against the
+# same glibc/OpenSSL as the sysroot. Reconstructing the toolchain from just the
+# compiler basename drops --sysroot and causes glibc symbol mismatches
+# (e.g. libcrypto.so needing __isoc23_strtol@GLIBC_2.38).
+# FIND_ROOT_PATH_MODE_*=BOTH so cmake can also see our out-of-sysroot deps
+# (asio headers, lz4 static lib) which we additionally pin via -D cache vars.
+RUN . /opt/axis/acapsdk/environment-setup* && \
+    mkdir -p /opt/ovpn3 && \
+    CC_BIN=$(echo $CC | awk '{print $1}') && \
+    CXX_BIN=$(echo $CXX | awk '{print $1}') && \
+    CC_PATH=$(which $CC_BIN) && \
+    CXX_PATH=$(which $CXX_BIN) && \
+    CC_ARGS=$(echo $CC | cut -s -d' ' -f2-) && \
+    CXX_ARGS=$(echo $CXX | cut -s -d' ' -f2-) && \
+    if [ "$ARCH" = "aarch64" ]; then CMAKE_PROC=aarch64; else CMAKE_PROC=arm; fi && \
+    { \
+      echo 'set(CMAKE_SYSTEM_NAME Linux)'; \
+      echo "set(CMAKE_SYSTEM_PROCESSOR ${CMAKE_PROC})"; \
+      echo "set(CMAKE_C_COMPILER ${CC_PATH})"; \
+      echo "set(CMAKE_CXX_COMPILER ${CXX_PATH})"; \
+      echo "set(CMAKE_C_FLAGS_INIT \"${CC_ARGS} ${CFLAGS}\")"; \
+      echo "set(CMAKE_CXX_FLAGS_INIT \"${CXX_ARGS} ${CXXFLAGS}\")"; \
+      echo "set(CMAKE_EXE_LINKER_FLAGS_INIT \"${LDFLAGS}\")"; \
+      echo "set(CMAKE_SYSROOT ${SDKTARGETSYSROOT})"; \
+      echo "set(CMAKE_FIND_ROOT_PATH ${SDKTARGETSYSROOT})"; \
+      echo 'set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)'; \
+      echo 'set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)'; \
+      echo 'set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)'; \
+      echo 'set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)'; \
+    } > /opt/ovpn3/toolchain.cmake

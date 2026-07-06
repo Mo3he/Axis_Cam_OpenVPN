@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OpenVPN Client</title>
+    <style>
+        :root {
+            --bg:#0f1117; --surface:#181b23; --surface2:#1e2230; --border:#262a35;
+            --text:#e4e6ed; --muted:#8b8fa3; --accent:#2e2d2d;
+            --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --radius:10px;
+            --mono:'SF Mono',SFMono-Regular,Consolas,Menlo,monospace;
+        }
+        [data-theme="light"] {
+            --bg:#f5f6f8; --surface:#fff; --surface2:#f0f1f4; --border:#e0e3e8;
+            --text:#1a1a2e; --muted:#6b7084;
+        }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+               background:var(--bg); color:var(--text); padding:20px; font-size:14px;
+               max-width:720px; margin:0 auto; line-height:1.5; }
+        .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+        .header h1 { font-size:18px; font-weight:700; }
+        .theme-btn { background:var(--surface); border:1px solid var(--border); color:var(--muted);
+                     cursor:pointer; border-radius:8px; padding:6px; display:flex; }
+        .theme-btn svg { width:16px; height:16px; }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+                padding:20px; margin-bottom:14px; }
+        .card-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+                      color:var(--muted); margin-bottom:14px; }
+        .status-banner { display:flex; align-items:center; gap:12px; padding:14px 16px;
+                         border-radius:8px; margin-bottom:16px; }
+        .status-banner.connected { background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.2); }
+        .status-banner.connecting { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.2); }
+        .status-banner.disconnected { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.2); }
+        .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+        .status-banner.connected .dot { background:var(--green); box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+        .status-banner.connecting .dot { background:var(--yellow); box-shadow:0 0 0 3px rgba(245,158,11,.2); animation:pulse 1.5s infinite; }
+        .status-banner.disconnected .dot { background:var(--red); box-shadow:0 0 0 3px rgba(239,68,68,.2); }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+        .status-text { font-size:14px; font-weight:600; }
+        .status-banner.connected .status-text { color:var(--green); }
+        .status-banner.connecting .status-text { color:var(--yellow); }
+        .status-banner.disconnected .status-text { color:var(--red); }
+        .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .info-item { background:var(--surface2); border-radius:8px; padding:12px 14px; }
+        .info-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
+                      color:var(--muted); margin-bottom:4px; }
+        .info-value { font-size:14px; font-weight:600; font-family:var(--mono); word-break:break-all; }
+        .settings-form { display:flex; flex-direction:column; gap:12px; }
+        .settings-row { display:flex; flex-direction:column; gap:4px; }
+        .settings-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+        .settings-input, textarea.settings-input { background:var(--surface2); border:1px solid var(--border);
+            border-radius:6px; color:var(--text); font-size:13px; font-family:var(--mono); padding:8px 10px; width:100%; outline:none; }
+        textarea.settings-input { min-height:150px; resize:vertical; }
+        .settings-input:focus { border-color:var(--muted); }
+        .settings-hint { font-size:11px; color:var(--muted); }
+        .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .settings-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:4px; }
+        .save-btn { background:var(--accent); color:#fff; border:none; border-radius:6px; padding:8px 18px;
+                    font-size:13px; font-weight:600; cursor:pointer; }
+        .save-btn:disabled { opacity:.5; cursor:default; }
+        .save-status { font-size:12px; color:var(--muted); }
+        .save-status.ok { color:var(--green); } .save-status.err { color:var(--red); }
+        .log-controls { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .log-toggle { font-size:12px; color:var(--muted); background:none; border:none; cursor:pointer; font-weight:600; }
+        .log-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px;
+                   max-height:360px; overflow-y:auto; font-family:var(--mono); font-size:11.5px; line-height:1.7;
+                   color:var(--muted); white-space:pre-wrap; word-break:break-all; }
+        .log-line .msg-err { color:var(--red); } .log-line .msg-warn { color:var(--yellow); }
+        .log-line .msg-ok { color:var(--green); } .log-line .ts { opacity:.6; }
+        .refresh-bar { display:flex; align-items:center; justify-content:center; gap:6px; padding:8px;
+                       font-size:11px; color:var(--muted); }
+        @media (max-width:480px){ body{padding:14px;} .info-grid,.row2{grid-template-columns:1fr;} }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OpenVPN Client</h1>
+        <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">
+            <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+    </div>
+
+    <div id="banner" class="status-banner connecting"><span class="dot"></span><span id="state" class="status-text">Loading...</span></div>
+
+    <div class="card">
+        <div class="card-title">Connection</div>
+        <div class="info-grid">
+            <div class="info-item"><div class="info-label">VPN IP</div><div class="info-value" id="ip">-</div></div>
+            <div class="info-item"><div class="info-label">State</div><div class="info-value" id="st">-</div></div>
+        </div>
+        <div class="settings-hint" id="err" style="margin-top:10px;color:var(--red);"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Access</div>
+        <div class="info-grid">
+            <div class="info-item"><div class="info-label">Reach camera from VPN</div><div class="info-value" id="reach">-</div></div>
+            <div class="info-item"><div class="info-label">Inbound SOCKS5 (from VPN)</div><div class="info-value" id="insocks">-</div></div>
+            <div class="info-item"><div class="info-label">Outbound HTTP proxy</div><div class="info-value" id="httpproxy">http://127.0.0.1:8080</div></div>
+            <div class="info-item"><div class="info-label">Outbound SOCKS5</div><div class="info-value" id="outsocks">127.0.0.1:1080</div></div>
+        </div>
+        <div class="settings-hint" style="margin-top:10px;">Ports 80/443/554 on the VPN IP are forwarded to the camera. Set the camera's global HTTP proxy to the outbound proxy to route its traffic through the VPN.</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Settings</div>
+        <div class="settings-form">
+            <div class="settings-row">
+                <label class="settings-label" for="profile">OpenVPN profile (.ovpn, inline certs supported)</label>
+                <textarea class="settings-input" id="profile" placeholder="client&#10;dev tun&#10;proto udp&#10;remote vpn.example.com 1194&#10;..."></textarea>
+                <span class="settings-hint">Paste your full .ovpn here, or use the file picker below.</span>
+                <input type="file" id="ovpnFile" accept=".ovpn,.conf,text/plain" style="margin-top:6px;font-size:12px;color:var(--muted);">
+            </div>
+            <div class="row2">
+                <div class="settings-row"><label class="settings-label" for="user">Username (optional)</label><input class="settings-input" id="user" type="text" autocomplete="off"></div>
+                <div class="settings-row"><label class="settings-label" for="pass">Password (optional)</label><input class="settings-input" id="pass" type="password" autocomplete="off"></div>
+            </div>
+            <div class="row2">
+                <div class="settings-row"><label class="settings-label" for="httpPort">Outbound HTTP proxy port</label><input class="settings-input" id="httpPort" type="text" placeholder="8080" autocomplete="off"></div>
+                <div class="settings-row"><label class="settings-label" for="socksPort">Outbound SOCKS5 port</label><input class="settings-input" id="socksPort" type="text" placeholder="1080" autocomplete="off"></div>
+            </div>
+            <div class="settings-actions">
+                <span class="save-status" id="savestatus"></span>
+                <button class="save-btn" id="save">Save &amp; Restart</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="log-controls">
+            <div class="card-title" style="margin-bottom:0;">Service Log</div>
+            <button class="log-toggle" id="log-scroll-btn">Scroll to bottom</button>
+        </div>
+        <div class="log-box" id="log-box">Loading logs...</div>
+    </div>
+
+    <div class="refresh-bar">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span>Auto-refresh every 4s</span>
+    </div>
+
+<script>
+(function () {
+    var GROUP = 'OpenVPN';
+    var PARAM = '/axis-cgi/param.cgi';
+    var LOG_URL = '/axis-cgi/admin/systemlog.cgi?appname=' + GROUP;
+    var logBox = document.getElementById('log-box');
+    var autoScroll = true;
+
+    // Theme
+    var root = document.documentElement, sun = document.getElementById('iconSun'), moon = document.getElementById('iconMoon');
+    function applyTheme(t) {
+        if (t === 'light') { root.setAttribute('data-theme','light'); sun.style.display='none'; moon.style.display='block'; }
+        else { root.removeAttribute('data-theme'); sun.style.display='block'; moon.style.display='none'; }
+    }
+    var stored = localStorage.getItem('ovpn-theme');
+    if (stored) applyTheme(stored);
+    else if (window.matchMedia('(prefers-color-scheme: light)').matches) applyTheme('light');
+    document.getElementById('themeToggle').addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        localStorage.setItem('ovpn-theme', next); applyTheme(next);
+    });
+
+    document.getElementById('log-scroll-btn').addEventListener('click', function () {
+        logBox.scrollTop = logBox.scrollHeight; autoScroll = true;
+    });
+    logBox.addEventListener('scroll', function () {
+        autoScroll = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;
+    });
+
+    var LABELS = { connected:'Connected', connecting:'Connecting...', tun_established:'Connecting...',
+                   disconnected:'Disconnected', waiting_config:'Waiting for profile',
+                   config_error:'Profile error', auth_failed:'Authentication failed', starting:'Starting...' };
+    function bannerClass(s) {
+        if (s === 'connected') return 'connected';
+        if (s === 'connecting' || s === 'tun_established' || s === 'starting') return 'connecting';
+        return 'disconnected';
+    }
+
+    function pollStatus() {
+        fetch('status.json?_=' + Date.now(), { cache:'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (!j) return;
+                document.getElementById('banner').className = 'status-banner ' + bannerClass(j.state);
+                document.getElementById('state').textContent = LABELS[j.state] || j.state;
+                document.getElementById('st').textContent = j.state || '-';
+                var ip = j.vpn_ip4 || '-';
+                document.getElementById('ip').textContent = ip;
+                document.getElementById('err').textContent = j.last_error || '';
+                var hp = j.http_port || '8080', sp = j.socks_port || '1080';
+                document.getElementById('httpproxy').textContent = 'http://127.0.0.1:' + hp;
+                document.getElementById('outsocks').textContent = '127.0.0.1:' + sp;
+                if (ip && ip !== '-') {
+                    document.getElementById('reach').textContent = ip + ':80 / :443 / :554';
+                    document.getElementById('insocks').textContent = ip + ':1080';
+                } else {
+                    document.getElementById('reach').textContent = '-';
+                    document.getElementById('insocks').textContent = '-';
+                }
+            }).catch(function () {});
+    }
+
+    function classify(msg) {
+        if (/error|fail|panic|fatal/i.test(msg)) return 'msg-err';
+        if (/warn|timeout|retry/i.test(msg)) return 'msg-warn';
+        if (/connected|running|ready|up\b/i.test(msg)) return 'msg-ok';
+        return '';
+    }
+    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function pollLogs() {
+        fetch(LOG_URL, { cache:'no-store' })
+            .then(function (r) { return r.text(); })
+            .then(function (txt) {
+                var lines = txt.split('\n').filter(function (l) { return l.trim(); });
+                var h = '';
+                for (var i = 0; i < lines.length; i++) {
+                    var m = lines[i].match(/^(\S+\s+\S+)\s+(.*)/);
+                    var cls = classify(lines[i]);
+                    if (m) h += '<span class="log-line"><span class="ts">' + esc(m[1]) + '</span> <span class="' + cls + '">' + esc(m[2]) + '</span></span>\n';
+                    else h += '<span class="log-line"><span class="' + cls + '">' + esc(lines[i]) + '</span></span>\n';
+                }
+                logBox.innerHTML = h || 'No logs yet.';
+                if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
+            }).catch(function () {});
+    }
+
+    // Load current small params into the form.
+    fetch(PARAM + '?action=list&group=' + GROUP, { cache:'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+            var g = function (k) { var m = t.match(new RegExp('\\.' + k + '=(.*)')); return m ? m[1].trim() : ''; };
+            document.getElementById('user').value = g('Username');
+            document.getElementById('httpPort').value = g('HttpProxyPort');
+            document.getElementById('socksPort').value = g('Socks5Port');
+        }).catch(function () {});
+
+    document.getElementById('ovpnFile').addEventListener('change', function (e) {
+        var f = e.target.files[0]; if (!f) return;
+        var reader = new FileReader();
+        reader.onload = function () { document.getElementById('profile').value = reader.result; };
+        reader.readAsText(f);
+    });
+
+    document.getElementById('save').addEventListener('click', function () {
+        var profile = document.getElementById('profile').value;
+        var st = document.getElementById('savestatus');
+        st.className = 'save-status'; st.textContent = 'Saving...';
+        var body = 'action=update'
+            + '&' + GROUP + '.Username=' + encodeURIComponent(document.getElementById('user').value)
+            + '&' + GROUP + '.Password=' + encodeURIComponent(document.getElementById('pass').value)
+            + '&' + GROUP + '.HttpProxyPort=' + encodeURIComponent(document.getElementById('httpPort').value || '8080')
+            + '&' + GROUP + '.Socks5Port=' + encodeURIComponent(document.getElementById('socksPort').value || '1080');
+        fetch(PARAM, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body })
+            .then(function () {
+                if (!profile) return { text:function(){return Promise.resolve('OK');} };
+                return fetch('api/profile', { method:'POST', headers:{'Content-Type':'text/plain'}, body:profile });
+            })
+            .then(function (r) { return r.text ? r.text() : 'OK'; })
+            .then(function (tx) { st.className = /OK/i.test(tx) ? 'save-status ok' : 'save-status err';
+                                  st.textContent = /OK/i.test(tx) ? 'Saved. Restarting...' : ('Error: ' + tx); })
+            .catch(function (e) { st.className = 'save-status err'; st.textContent = 'Error: ' + e; });
+    });
+
+    pollStatus(); pollLogs();
+    setInterval(pollStatus, 4000);
+    setInterval(pollLogs, 4000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+    "schemaVersion": "1.7.0",
+    "acapPackageConf": {
+        "setup": {
+            "friendlyName": "OpenVPN Client",
+            "appName": "OpenVPN",
+            "vendor": "Mo3he",
+            "embeddedSdkVersion": "3.0",
+            "vendorUrl": "https://github.com/Mo3he",
+            "runMode": "respawn",
+            "version": "0.1.0",
+            "user": {
+                "group": "sdk",
+                "username": "sdk"
+            },
+            "architecture": "BUILDARCH"
+        },
+        "configuration": {
+            "settingPage": "index.html",
+            "reverseProxy": [
+                {
+                    "apiPath": "api",
+                    "target": "http://localhost:2202/",
+                    "access": "admin"
+                }
+            ],
+            "paramConfig": [
+                {"name": "Username",      "default": "",     "type": "string"},
+                {"name": "Password",      "default": "",     "type": "string"},
+                {"name": "HttpProxyPort", "default": "8080", "type": "string"},
+                {"name": "Socks5Port",    "default": "1080", "type": "string"}
+            ]
+        }
+    }
+}
