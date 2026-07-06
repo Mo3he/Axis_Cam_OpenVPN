@@ -38,7 +38,7 @@ jobs:
 
       # Builds the openvpn3-base image and the .eap for both architectures.
       - name: Build (aarch64 + armv7hf)
-        run: RUNTIME=docker ./build.sh
+        run: RUNTIME=docker sh ./build.sh
 
       - name: Verify packages
         run: |
