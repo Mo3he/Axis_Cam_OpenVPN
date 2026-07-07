@@ -5,7 +5,7 @@ It bundles or links the following third-party components, each under its own
 license. This file collects their attributions.
 
 ## OpenVPN3 core (`lib/tun_probe`)
-- Project: https://github.com/OpenVPN/openvpn3
+- Project: <https://github.com/OpenVPN/openvpn3>
 - Copyright (C) 2012- OpenVPN Inc.
 - License: **AGPL-3.0-only WITH openvpn3-openssl-exception** (also available under
   a separate commercial license from OpenVPN Inc.). The OpenSSL exception permits
@@ -13,17 +13,17 @@ license. This file collects their attributions.
 - Compiled from source and shipped as `lib/tun_probe`.
 
 ## asio (header-only, compiled into `lib/tun_probe`)
-- Project: https://github.com/chriskohlhoff/asio
+- Project: <https://github.com/chriskohlhoff/asio>
 - Copyright (C) Christopher M. Kohlhoff
 - License: **Boost Software License 1.0 (BSL-1.0)**
 
 ## LZ4 (compiled into `lib/tun_probe`)
-- Project: https://github.com/lz4/lz4
+- Project: <https://github.com/lz4/lz4>
 - Copyright (C) Yann Collet
 - License: **BSD 2-Clause**
 
 ## OpenSSL (linked, provided by Axis OS)
-- Project: https://www.openssl.org/
+- Project: <https://www.openssl.org/>
 - License: **Apache License 2.0** (OpenSSL 3.x)
 
 ## Go netstack sidecar (`lib/netstack_proxy`)
