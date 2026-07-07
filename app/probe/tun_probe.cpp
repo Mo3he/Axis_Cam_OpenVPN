@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
 
     ClientAPI::Config config;
     config.content = profile;
-    config.guiVersion = "AxisOpenVPN 0.1.0";
+    config.guiVersion = "AxisOpenVPN 0.1.1";
     config.tunPersist = false;
     config.connTimeout = 0;
     config.dco = false;

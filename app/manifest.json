@@ -1,19 +1,22 @@
 {
-    "schemaVersion": "1.7.0",
+    "schemaVersion": "2.0.0",
     "acapPackageConf": {
         "setup": {
             "friendlyName": "OpenVPN Client",
             "appName": "OpenVPN",
             "vendor": "Mo3he",
-            "embeddedSdkVersion": "3.0",
+            "vendorId": "5741c1fb91",
             "vendorUrl": "https://github.com/Mo3he",
             "runMode": "respawn",
-            "version": "0.1.0",
+            "version": "0.1.1",
             "user": {
                 "group": "sdk",
                 "username": "sdk"
             },
-            "architecture": "BUILDARCH"
+            "architecture": "BUILDARCH",
+            "compatibleOsVersions": [
+                { "max": "13" }
+            ]
         },
         "configuration": {
             "settingPage": "index.html",

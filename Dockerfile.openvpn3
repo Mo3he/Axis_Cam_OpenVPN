@@ -13,8 +13,8 @@
 #   podman build --build-arg ARCH=aarch64 -t openvpn3-base-aarch64 -f Dockerfile.openvpn3 .
 
 ARG ARCH=aarch64
-ARG VERSION=1.15.1
-ARG UBUNTU_VERSION=22.04
+ARG VERSION=12.10.0
+ARG UBUNTU_VERSION=24.04
 ARG REPO=docker.io/axisecp
 ARG SDK=acap-native-sdk
 
@@ -29,6 +29,11 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 ARG OPENVPN3_VERSION=release/3.11
 ARG ASIO_VERSION=asio-1-30-2
 ARG LZ4_VERSION=v1.9.4
+# Match the SDK 12.10 sysroot OpenSSL (3.5.6). We build it static so tun_probe
+# does NOT depend on the device's OpenSSL: the sysroot ships only OpenSSL 3.5
+# shared libs, whose symbols carry OPENSSL_3.4.0+ version tags that AXIS OS <
+# 12.10 (OpenSSL 3.0) lacks -> dynamic linking would cap the floor at 12.10.
+ARG OPENSSL_VERSION=openssl-3.5.6
 
 WORKDIR /src
 RUN git clone --depth 1 --branch ${OPENVPN3_VERSION} \
@@ -36,7 +41,9 @@ RUN git clone --depth 1 --branch ${OPENVPN3_VERSION} \
     git clone --depth 1 --branch ${ASIO_VERSION} \
         https://github.com/chriskohlhoff/asio.git deps/asio && \
     git clone --depth 1 --branch ${LZ4_VERSION} \
-        https://github.com/lz4/lz4.git deps/lz4
+        https://github.com/lz4/lz4.git deps/lz4 && \
+    git clone --depth 1 --branch ${OPENSSL_VERSION} \
+        https://github.com/openssl/openssl.git deps/openssl
 
 # ── cross-compile lz4 (static) ────────────────────────────────────────────
 ARG ARCH
@@ -46,6 +53,31 @@ RUN . /opt/axis/acapsdk/environment-setup* && \
     cp /src/deps/lz4/lib/liblz4.a /opt/ovpn3-deps/lib/ && \
     cp /src/deps/lz4/lib/lz4.h /src/deps/lz4/lib/lz4hc.h \
        /src/deps/lz4/lib/lz4frame.h /opt/ovpn3-deps/include/
+
+# ── cross-compile OpenSSL 3.5 (static) ────────────────────────────────────
+# Installs libcrypto.a / libssl.a + headers + .pc files into /opt/ovpn3-deps so
+# the app-stage cmake links OpenSSL statically (see PKG_CONFIG_PATH there).
+# no-shared/no-module/no-dso keep the providers built-in (no runtime .so load).
+# -std=gnu11 keeps the GCC 13 C23 redirect off so OpenSSL's own strtol/sscanf
+# bind the plain GLIBC_2.17 symbols (belt-and-suspenders with the tun_probe
+# isoc23 shim), preserving the glibc 2.34 floor too.
+RUN . /opt/axis/acapsdk/environment-setup* && \
+    unset CROSS_COMPILE && \
+    CC_BIN=$(echo $CC | awk '{print $1}') && \
+    CC_ARGS=$(echo $CC | cut -s -d' ' -f2-) && \
+    case "$($CC_BIN -dumpmachine)" in \
+        aarch64*) OSSL_TARGET=linux-aarch64 ;; \
+        arm*)     OSSL_TARGET=linux-armv4 ;; \
+        *) echo "unknown OpenSSL target machine: $($CC_BIN -dumpmachine)" >&2; exit 1 ;; \
+    esac && \
+    echo "OpenSSL cross target: $OSSL_TARGET" && \
+    cd /src/deps/openssl && \
+    ./Configure "$OSSL_TARGET" no-shared no-module no-dso no-tests no-docs \
+        --prefix=/opt/ovpn3-deps --openssldir=/opt/ovpn3-deps/ssl \
+        CC="$CC_BIN" CFLAGS="$CC_ARGS $CFLAGS -std=gnu11" \
+        AR="$AR" RANLIB="$RANLIB" && \
+    make -j"$(nproc)" build_libs && \
+    make install_dev
 
 # ── cmake cross toolchain file (stable path for the app stage) ─────────────
 # Capture the ACAP SDK's FULL compiler invocation (binary + flags incl.
