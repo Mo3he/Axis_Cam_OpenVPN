@@ -14,6 +14,9 @@ traffic out through the tunnel.
 > endorsed by, or supported by Axis Communications AB or the OpenVPN project.
 > Use at your own risk.
 
+[![Sponsor](https://img.shields.io/badge/Sponsor%20My%20Work-grey?logo=github)](https://github.com/sponsors/Mo3he)  
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-grey?style=flat&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/mo3he)
+
 ## How it works
 
 Three layers, the same pattern as the WireGuard and ZeroTier camera ACAPs:
