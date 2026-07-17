@@ -1,52 +1,47 @@
-# OpenVPN Client ACAP for Axis cameras
+# OpenVPN ACAP for Axis Cameras
+
+[![Release](https://img.shields.io/github/v/release/Mo3he/Axis_Cam_OpenVPN?style=flat)](https://github.com/Mo3he/Axis_Cam_OpenVPN/releases)
+[![License](https://img.shields.io/github/license/Mo3he/Axis_Cam_OpenVPN?style=flat)](LICENSE)
+[![Build](https://github.com/Mo3he/Axis_Cam_OpenVPN/actions/workflows/build.yml/badge.svg)](https://github.com/Mo3he/Axis_Cam_OpenVPN/actions/workflows/build.yml)
+[![Super-Linter](https://github.com/Mo3he/Axis_Cam_OpenVPN/actions/workflows/super-linter.yml/badge.svg)](https://github.com/Mo3he/Axis_Cam_OpenVPN/actions/workflows/super-linter.yml)
+[![Sponsor](https://img.shields.io/badge/Sponsor%20My%20Work-EA4AAA?style=flat&logo=github&logoColor=white)](https://github.com/sponsors/Mo3he)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/mo3he)
 
 An **OpenVPN client that runs directly on Axis cameras** as an ACAP application,
 entirely in **userspace** with **no root** and no kernel TUN device. It makes the
 camera reachable from your OpenVPN network and lets the camera route its own
 traffic out through the tunnel.
 
-- **No root required** — runs as the standard unprivileged `sdk` ACAP user
-- **Works on Axis OS 12** (and 11.x) — verified on Axis OS 12.10
-- **No kernel TUN / CAP_NET_ADMIN** — the OpenVPN3 core terminates the tunnel in
-  userspace and hands packets to an in-process gVisor netstack
+> **Disclaimer:** Independent, community-developed ACAP package. Not an official
+> Axis product and not affiliated with, endorsed by, or supported by Axis
+> Communications AB or the OpenVPN project. Use at your own risk.
 
-> **Disclaimer:** Independent, community-developed ACAP. Not affiliated with,
-> endorsed by, or supported by Axis Communications AB or the OpenVPN project.
-> Use at your own risk.
+## Overview
 
-[![Sponsor](https://img.shields.io/badge/Sponsor%20My%20Work-grey?logo=github)](https://github.com/sponsors/Mo3he)  
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-grey?style=flat&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/mo3he)
+An OpenVPN client packaged as an ACAP, running fully in userspace so it needs no
+special privileges on the camera.
 
-## How it works
+- **No root required:** runs as the standard unprivileged `sdk` ACAP user.
+- **Works on AXIS OS 12** (and 11.x), verified on AXIS OS 12.10.
+- **No kernel TUN / CAP_NET_ADMIN:** the OpenVPN3 core terminates the tunnel in
+  userspace and hands packets to an in-process gVisor netstack.
 
-Three layers, the same pattern as the WireGuard and ZeroTier camera ACAPs:
+## Compatibility
 
-1. **OpenVPN3 core** (`lib/tun_probe`, C++) connects to your server. Built with
-   `USE_TUN_BUILDER`, its `tun_builder_establish()` returns one end of a
-   `SOCK_DGRAM` socketpair instead of opening `/dev/net/tun`, so no privileges
-   are needed. The encrypted transport is an ordinary UDP/TCP socket.
-2. **Userspace netstack** (`lib/netstack_proxy`, Go) attaches a
-   [gVisor](https://gvisor.dev/) netstack to that socketpair and runs the proxy
-   layer:
-   - Transparent TCP forwarders for camera ports **80 / 443 / 554**
-   - **Inbound SOCKS5** on `<vpn-ip>:1080` (reach any camera port from the VPN)
-   - **Outbound HTTP CONNECT** on `127.0.0.1:8080` (camera → VPN/internet)
-   - **Outbound SOCKS5** on `127.0.0.1:1080`
-3. **C bridge** (`OpenVPN`) reads settings via axparameter, serves a small
-   HTTP endpoint for uploading the `.ovpn` profile (too large for the parameter
-   store), launches the client, and restarts it on config changes with a watchdog.
+- **AXIS OS:** 11.x through 13.
+- **Architectures:** `aarch64` and `armv7hf`.
 
-## Install
+## Installation
 
 Download the `.eap` for your camera's architecture and install via the camera
-web interface under **Apps → Add app**.
+web interface under **Apps -> Add app**.
 
 | Architecture | File |
 |---|---|
 | aarch64 | `OpenVPN_<version>_aarch64.eap` |
 | armv7hf | `OpenVPN_<version>_armv7hf.eap` |
 
-## Configure
+## Configuration
 
 Open the app's settings page and:
 
@@ -72,8 +67,40 @@ curl -k https://<vpn-ip>/       # HTTPS
 
 ### Routing camera traffic through the VPN
 
-Set the camera's **System → Network → Global proxy** (HTTP/HTTPS) to
+Set the camera's **System -> Network -> Global proxy** (HTTP/HTTPS) to
 `http://127.0.0.1:8080`, or point a SOCKS5-aware service at `127.0.0.1:1080`.
+
+## Ports & security
+
+| Service | Address | Purpose |
+|---|---|---|
+| Transparent forwarders | `<vpn-ip>:80 / 443 / 554` | Camera web UI, HTTPS, and RTSP over the tunnel |
+| Inbound SOCKS5 | `<vpn-ip>:1080` | Reach any camera port from the VPN |
+| Outbound HTTP CONNECT | `127.0.0.1:8080` | Camera -> VPN/internet |
+| Outbound SOCKS5 | `127.0.0.1:1080` | Camera -> VPN/internet for SOCKS5-aware apps |
+
+> **Security:** the inbound SOCKS5 proxy is bound to the tunnel IP and is
+> therefore reachable by any peer on your OpenVPN network. Restrict access with
+> your VPN's own ACLs, and keep the camera behind its normal authentication.
+
+## How it works
+
+Three layers, the same pattern as the WireGuard and ZeroTier camera ACAPs:
+
+1. **OpenVPN3 core** (`lib/tun_probe`, C++) connects to your server. Built with
+   `USE_TUN_BUILDER`, its `tun_builder_establish()` returns one end of a
+   `SOCK_DGRAM` socketpair instead of opening `/dev/net/tun`, so no privileges
+   are needed. The encrypted transport is an ordinary UDP/TCP socket.
+2. **Userspace netstack** (`lib/netstack_proxy`, Go) attaches a
+   [gVisor](https://gvisor.dev/) netstack to that socketpair and runs the proxy
+   layer:
+   - Transparent TCP forwarders for camera ports **80 / 443 / 554**
+   - **Inbound SOCKS5** on `<vpn-ip>:1080` (reach any camera port from the VPN)
+   - **Outbound HTTP CONNECT** on `127.0.0.1:8080` (camera -> VPN/internet)
+   - **Outbound SOCKS5** on `127.0.0.1:1080`
+3. **C bridge** (`OpenVPN`) reads settings via axparameter, serves a small
+   HTTP endpoint for uploading the `.ovpn` profile (too large for the parameter
+   store), launches the client, and restarts it on config changes with a watchdog.
 
 ## Build from source
 
@@ -95,10 +122,16 @@ plane: the camera is reachable from the VPN and can route out through it, but th
 whole camera OS is not transparently placed on the VPN. Server-pushed DNS and
 `redirect-gateway` apply to the netstack, not the camera's system resolver.
 
+## Links
+
+- [OpenVPN](https://openvpn.net/)
+- [OpenVPN3](https://github.com/OpenVPN/openvpn3)
+- [Axis Communications](https://www.axis.com/)
+
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0**
-(AGPL-3.0-or-later) — see [LICENSE](LICENSE). AGPL is required because the app
+(AGPL-3.0-or-later); see [LICENSE](LICENSE). AGPL is required because the app
 bundles the [OpenVPN3](https://github.com/OpenVPN/openvpn3) core, which is
 AGPL-3.0-or-later.
 
