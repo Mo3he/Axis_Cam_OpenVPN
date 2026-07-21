@@ -2,10 +2,10 @@
     "schemaVersion": "2.0.0",
     "acapPackageConf": {
         "setup": {
-            "friendlyName": "OpenVPN Client",
-            "appName": "OpenVPN",
-            "vendor": "Mo3he",
-            "vendorId": "5741c1fb91",
+            "friendlyName": "OpenVPN VPN",
+            "appName": "OpenVPN_VPN",
+            "vendor": "moshe@mohome.net",
+            "vendorId": "70ee172dd9",
             "vendorUrl": "https://github.com/Mo3he",
             "runMode": "respawn",
             "version": "0.1.1",

@@ -3,7 +3,7 @@
 # cross-compiled separately in the Dockerfile and are already present in lib/
 # by the time acap-build runs this Makefile.
 
-PROG      = OpenVPN
+PROG      = OpenVPN_VPN
 BRIDGE_SRC = openvpn_bridge.c
 
 STRIP ?= strip

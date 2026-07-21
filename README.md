@@ -33,6 +33,15 @@ special privileges on the camera.
 
 ## Installation
 
+> **Signed packages:** Release `.eap` files are signed with the Axis ACAP
+> signing service and install normally on AXIS OS 12.10 and later.
+>
+> **Upgrading from an earlier version?** The signing vendor changed, so
+> installing over a previously installed unsigned build can fail with
+> **"Couldn't install: app"** (device log: *"Vendor ID in manifest does not
+> match the vendor ID of the previous version"*). To upgrade: back up your app
+> configuration, **uninstall** the old version, then install the signed one.
+
 Download the `.eap` for your camera's architecture and install via the camera
 web interface under **Apps -> Add app**.
 
