@@ -144,7 +144,7 @@
 
 <script>
 (function () {
-    var GROUP = 'OpenVPN';
+    var GROUP = 'OpenVPN_VPN';
     var PARAM = '/axis-cgi/param.cgi';
     var LOG_URL = '/axis-cgi/admin/systemlog.cgi?appname=' + GROUP;
     var logBox = document.getElementById('log-box');
@@ -228,15 +228,30 @@
             }).catch(function () {});
     }
 
-    // Load current small params into the form.
+    // Load current small params into the form. Uses param.cgi when available
+    // and falls back to the app's own endpoint on devices that do not serve it
+    // (e.g. recorder/NVR and access-control products).
+    var API_SETTINGS = 'api/settings';
+
+    function applyParams(obj) {
+        if (typeof obj.Username === 'string') document.getElementById('user').value = obj.Username;
+        if (typeof obj.HttpProxyPort === 'string') document.getElementById('httpPort').value = obj.HttpProxyPort;
+        if (typeof obj.Socks5Port === 'string') document.getElementById('socksPort').value = obj.Socks5Port;
+    }
+
     fetch(PARAM + '?action=list&group=' + GROUP, { cache:'no-store' })
-        .then(function (r) { return r.text(); })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
         .then(function (t) {
-            var g = function (k) { var m = t.match(new RegExp('\\.' + k + '=(.*)')); return m ? m[1].trim() : ''; };
-            document.getElementById('user').value = g('Username');
-            document.getElementById('httpPort').value = g('HttpProxyPort');
-            document.getElementById('socksPort').value = g('Socks5Port');
-        }).catch(function () {});
+            var g = function (k) { var m = t.match(new RegExp('\\.' + k + '=(.*)')); return m ? m[1].trim() : null; };
+            if (g('Username') === null && g('HttpProxyPort') === null && g('Socks5Port') === null) return Promise.reject();
+            applyParams({ Username: g('Username') || '', HttpProxyPort: g('HttpProxyPort') || '', Socks5Port: g('Socks5Port') || '' });
+        })
+        .catch(function () {
+            fetch(API_SETTINGS + '?_=' + Date.now(), { cache:'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (obj) { if (obj) applyParams(obj); })
+                .catch(function () {});
+        });
 
     document.getElementById('ovpnFile').addEventListener('change', function (e) {
         var f = e.target.files[0]; if (!f) return;
@@ -249,20 +264,39 @@
         var profile = document.getElementById('profile').value;
         var st = document.getElementById('savestatus');
         st.className = 'save-status'; st.textContent = 'Saving...';
-        var body = 'action=update'
-            + '&' + GROUP + '.Username=' + encodeURIComponent(document.getElementById('user').value)
-            + '&' + GROUP + '.Password=' + encodeURIComponent(document.getElementById('pass').value)
-            + '&' + GROUP + '.HttpProxyPort=' + encodeURIComponent(document.getElementById('httpPort').value || '8080')
-            + '&' + GROUP + '.Socks5Port=' + encodeURIComponent(document.getElementById('socksPort').value || '1080');
-        fetch(PARAM, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body })
-            .then(function () {
-                if (!profile) return { text:function(){return Promise.resolve('OK');} };
-                return fetch('api/profile', { method:'POST', headers:{'Content-Type':'text/plain'}, body:profile });
+
+        var u  = document.getElementById('user').value;
+        var pw = document.getElementById('pass').value;
+        var hp = document.getElementById('httpPort').value || '8080';
+        var sp = document.getElementById('socksPort').value || '1080';
+
+        var cgiBody = 'action=update'
+            + '&' + GROUP + '.Username=' + encodeURIComponent(u)
+            + '&' + GROUP + '.Password=' + encodeURIComponent(pw)
+            + '&' + GROUP + '.HttpProxyPort=' + encodeURIComponent(hp)
+            + '&' + GROUP + '.Socks5Port=' + encodeURIComponent(sp);
+        var apiBody = 'Username=' + encodeURIComponent(u)
+            + '&Password=' + encodeURIComponent(pw)
+            + '&HttpProxyPort=' + encodeURIComponent(hp)
+            + '&Socks5Port=' + encodeURIComponent(sp);
+
+        function postProfile() {
+            if (!profile) return Promise.resolve('OK');
+            return fetch('api/profile', { method:'POST', headers:{'Content-Type':'text/plain'}, body:profile })
+                .then(function (r) { return r.text(); });
+        }
+
+        fetch(PARAM, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:cgiBody })
+            .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+            .catch(function () {
+                // param.cgi unavailable — use the app's settings endpoint.
+                return fetch(API_SETTINGS, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:apiBody })
+                    .then(function (r) { return r.ok ? r.text() : Promise.reject(); });
             })
-            .then(function (r) { return r.text ? r.text() : 'OK'; })
+            .then(function () { return postProfile(); })
             .then(function (tx) { st.className = /OK/i.test(tx) ? 'save-status ok' : 'save-status err';
                                   st.textContent = /OK/i.test(tx) ? 'Saved. Restarting...' : ('Error: ' + tx); })
-            .catch(function (e) { st.className = 'save-status err'; st.textContent = 'Error: ' + e; });
+            .catch(function (e) { st.className = 'save-status err'; st.textContent = 'Error: ' + (e || 'save failed'); });
     });
 
     pollStatus(); pollLogs();

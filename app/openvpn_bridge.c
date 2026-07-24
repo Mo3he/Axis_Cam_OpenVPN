@@ -6,9 +6,13 @@
  *
  * The OpenVPN .ovpn profile (with inline certs, several KB) is too large and
  * multi-line for the ACAP parameter store, so it is uploaded through a tiny
- * embedded HTTP server (127.0.0.1:2202) exposed via the manifest reverseProxy
- * at /local/OpenVPN/api/. The web UI POSTs the profile there; the bridge
+ * embedded HTTP server (127.0.0.1:2204) exposed via the manifest reverseProxy
+ * at /local/OpenVPN_VPN/api/. The web UI POSTs the profile there; the bridge
  * writes it to client.ovpn (persisted in localdata) and restarts the client.
+ *
+ * The same server also serves GET/POST /api/settings, a fallback the web UI
+ * uses to read and write the small axparameter settings on devices that do not
+ * expose /axis-cgi/param.cgi (e.g. recorder/NVR and access-control products).
  *
  * Small settings come through axparameter:
  *   Username/Password  - creds for non-autologin profiles
@@ -34,15 +38,19 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#define APP_NAME    "OpenVPN"
-#define APP_DIR     "/usr/local/packages/OpenVPN"
+#define APP_NAME    "OpenVPN_VPN"
+#define APP_DIR     "/usr/local/packages/OpenVPN_VPN"
 #define STATE_DIR   APP_DIR "/localdata"
 #define OVPN_FILE   STATE_DIR "/client.ovpn"
 #define CREDS_FILE  STATE_DIR "/creds.txt"
 #define PORTS_FILE  STATE_DIR "/ports.conf"
 #define STATUS_FILE APP_DIR "/html/status.json"
 #define CLIENT_BIN  APP_DIR "/lib/tun_probe"
-#define HTTP_PORT   2202
+/* Localhost port for the embedded HTTP server. Must be unique per ACAP: several
+ * of these VPN apps can run on the same device at once, and a shared port would
+ * make one app's reverseProxy hit another app's server. Registry: Tailscale
+ * 2201, ZeroTier 2202, WireGuard 2203, OpenVPN 2204. */
+#define HTTP_PORT   2204
 
 static pid_t client_pid = -1;
 static guint reload_timer_id = 0;
@@ -228,6 +236,124 @@ static void write_profile_file(const char *body, size_t len) {
     syslog(LOG_INFO, "profile uploaded (%zu bytes) via http", len);
 }
 
+/* ── settings fallback (GET/POST /api/settings) ──────────────────────────────
+ * Read/write the small axparameter settings directly, so the web UI can manage
+ * them on devices that do not serve /axis-cgi/param.cgi. */
+
+static const char *http_param_names[] = {
+    "Username", "Password", "HttpProxyPort", "Socks5Port"
+};
+
+static int http_is_known_param(const char *name) {
+    for (size_t i = 0; i < G_N_ELEMENTS(http_param_names); i++)
+        if (strcmp(name, http_param_names[i]) == 0) return 1;
+    return 0;
+}
+
+static void http_cache_set_by_name(const char *name, const char *value) {
+    if      (strcmp(name, "Username")      == 0) cache_set(&cfg_username,   value);
+    else if (strcmp(name, "Password")      == 0) cache_set(&cfg_password,   value);
+    else if (strcmp(name, "HttpProxyPort") == 0) cache_set(&cfg_http_port,  value);
+    else if (strcmp(name, "Socks5Port")    == 0) cache_set(&cfg_socks_port, value);
+}
+
+static void http_json_append_escaped(GString *out, const char *s) {
+    for (const char *p = s; *p; p++) {
+        switch (*p) {
+            case '"':  g_string_append(out, "\\\""); break;
+            case '\\': g_string_append(out, "\\\\"); break;
+            case '\n': g_string_append(out, "\\n");  break;
+            case '\r': g_string_append(out, "\\r");  break;
+            case '\t': g_string_append(out, "\\t");  break;
+            default:
+                if ((unsigned char)*p < 0x20)
+                    g_string_append_printf(out, "\\u%04x", (unsigned char)*p);
+                else
+                    g_string_append_c(out, *p);
+        }
+    }
+}
+
+static gchar *http_build_settings_json(void) {
+    GString *out = g_string_new("{");
+    for (size_t i = 0; i < G_N_ELEMENTS(http_param_names); i++) {
+        gchar *val = NULL;
+        GError *err = NULL;
+        if (!g_ax_handle ||
+            !ax_parameter_get(g_ax_handle, http_param_names[i], &val, &err)) {
+            if (err) g_error_free(err);
+            val = g_strdup("");
+        }
+        if (i) g_string_append_c(out, ',');
+        g_string_append_printf(out, "\"%s\":\"", http_param_names[i]);
+        http_json_append_escaped(out, val ? val : "");
+        g_string_append_c(out, '"');
+        g_free(val);
+    }
+    g_string_append_c(out, '}');
+    /* Copy out and fully free: g_string_free(out, FALSE) is inlined by newer glib
+     * headers into g_string_free_and_steal(), absent on older runtimes. */
+    gchar *json_result = g_strdup(out->str);
+    g_string_free(out, TRUE);
+    return json_result;
+}
+
+static gchar *http_url_decode(const char *s, size_t len) {
+    GString *out = g_string_new(NULL);
+    for (size_t i = 0; i < len; i++) {
+        char c = s[i];
+        if (c == '+') {
+            g_string_append_c(out, ' ');
+        } else if (c == '%' && i + 2 < len &&
+                   g_ascii_isxdigit(s[i + 1]) && g_ascii_isxdigit(s[i + 2])) {
+            int hi = g_ascii_xdigit_value(s[i + 1]);
+            int lo = g_ascii_xdigit_value(s[i + 2]);
+            g_string_append_c(out, (char)((hi << 4) | lo));
+            i += 2;
+        } else {
+            g_string_append_c(out, c);
+        }
+    }
+    gchar *decoded = g_strdup(out->str);
+    g_string_free(out, TRUE);
+    return decoded;
+}
+
+/* Apply a urlencoded body of Name=value pairs. Returns the number applied. */
+static int http_apply_settings(const char *body, size_t len) {
+    int applied = 0;
+    size_t start = 0;
+    for (size_t i = 0; i <= len; i++) {
+        if (i == len || body[i] == '&') {
+            size_t seg_len = i - start;
+            if (seg_len > 0) {
+                const char *seg = body + start;
+                const char *eq = memchr(seg, '=', seg_len);
+                if (eq) {
+                    size_t nlen = (size_t)(eq - seg);
+                    gchar *name = g_strndup(seg, nlen);
+                    gchar *value = http_url_decode(eq + 1, seg_len - nlen - 1);
+                    if (http_is_known_param(name) && g_ax_handle) {
+                        GError *err = NULL;
+                        if (ax_parameter_set(g_ax_handle, name, value, TRUE, &err)) {
+                            http_cache_set_by_name(name, value);
+                            applied++;
+                        } else {
+                            syslog(LOG_WARNING, "http set %s failed: %s",
+                                   name, err ? err->message : "unknown");
+                            if (err) g_error_free(err);
+                        }
+                    }
+                    g_free(name);
+                    g_free(value);
+                }
+            }
+            start = i + 1;
+        }
+    }
+    return applied;
+}
+
 static gboolean http_on_incoming(GSocketService *service G_GNUC_UNUSED,
                                  GSocketConnection *connection,
                                  GObject *source G_GNUC_UNUSED,
@@ -259,6 +385,7 @@ static gboolean http_on_incoming(GSocketService *service G_GNUC_UNUSED,
     int is_get = g_str_has_prefix(req->str, "GET ");
     int is_post = g_str_has_prefix(req->str, "POST ");
     int is_profile = 0;
+    int is_settings = 0;
     const char *sp1 = strchr(req->str, ' ');
     if (sp1) {
         const char *path = sp1 + 1;
@@ -268,6 +395,8 @@ static gboolean http_on_incoming(GSocketService *service G_GNUC_UNUSED,
         size_t mlen = q ? (size_t)(q - path) : plen;
         if (mlen >= 7 && g_ascii_strncasecmp(path + mlen - 7, "profile", 7) == 0)
             is_profile = 1;
+        else if (mlen >= 8 && g_ascii_strncasecmp(path + mlen - 8, "settings", 8) == 0)
+            is_settings = 1;
     }
 
     if (is_profile && is_post) {
@@ -283,6 +412,18 @@ static gboolean http_on_incoming(GSocketService *service G_GNUC_UNUSED,
         long sz = (stat(OVPN_FILE, &st) == 0) ? (long)st.st_size : 0;
         snprintf(msg, sizeof(msg), "{\"profile_bytes\":%ld}", sz);
         http_send(out, "200 OK", "application/json", msg);
+    } else if (is_settings && is_get) {
+        gchar *json = http_build_settings_json();
+        http_send(out, "200 OK", "application/json", json);
+        g_free(json);
+    } else if (is_settings && is_post) {
+        const char *body = req->str + header_end;
+        size_t body_len = req->len - header_end;
+        if (body_len > content_length) body_len = content_length;
+        int applied = http_apply_settings(body, body_len);
+        syslog(LOG_INFO, "settings http: applied %d parameter(s)", applied);
+        schedule_restart();
+        http_send(out, "200 OK", "text/plain", "OK");
     } else {
         http_send(out, "404 Not Found", "text/plain", "Not found");
     }

@@ -5,6 +5,22 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.1.2] - 2026-07-24 - Fix broken app name and save settings without param.cgi
+
+- Fix: the app package name in the bridge and web UI did not match the manifest
+  `appName` (`OpenVPN_VPN`). As a result the client binary was launched from the
+  wrong path (the tunnel never started) and settings were read from the wrong
+  parameter namespace. All internal references now use `OpenVPN_VPN`.
+- Fix: settings (username, password, proxy ports) can now be saved on Axis
+  devices that do not expose `/axis-cgi/param.cgi`, such as recorder/NVR
+  products (e.g. S3008) and access-control controllers (e.g. A1610, A1710,
+  A1810).
+- The app's existing HTTP endpoint now also serves
+  `/local/OpenVPN_VPN/api/settings`. The web UI uses `param.cgi` when available
+  and transparently falls back to this endpoint when it is not, writing settings
+  through the ACAP parameter store. The embedded server moved to port 2204 to
+  avoid clashing with the other VPN ACAPs' settings servers.
+
 ## [0.1.1-Signed] - 2026-07-21 - OpenVPN VPN 0.1.1 (Signed)
 
 - Packages are now signed with the Axis ACAP signing service and install
