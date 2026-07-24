@@ -22,13 +22,14 @@ An OpenVPN client packaged as an ACAP, running fully in userspace so it needs no
 special privileges on the camera.
 
 - **No root required:** runs as the standard unprivileged `sdk` ACAP user.
-- **Works on AXIS OS 12** (and 11.x), verified on AXIS OS 12.10.
+- **Works on AXIS OS 12** (and 11.x), verified on AXIS OS 12.10 and 13.0.
 - **No kernel TUN / CAP_NET_ADMIN:** the OpenVPN3 core terminates the tunnel in
   userspace and hands packets to an in-process gVisor netstack.
 
 ## Compatibility
 
 - **AXIS OS:** 11.x through 13.
+- **Verified on AXIS OS 13** (13.0.0, aarch64).
 - **Architectures:** `aarch64` and `armv7hf`.
 
 ## Installation
