@@ -485,7 +485,7 @@ func (t *tunnel) handleOutboundSOCKS5(c net.Conn) {
 }
 
 func main() {
-	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_USER, "OpenVPN"); err == nil {
+	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_USER, "OpenVPN_VPN"); err == nil {
 		slog.SetDefault(slog.New(slog.NewTextHandler(w, nil)))
 	}
 

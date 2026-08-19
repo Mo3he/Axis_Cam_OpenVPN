@@ -5,6 +5,20 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.1.4] - 2026-08-19 - Fix the userspace data plane, broken since 0.1.2
+
+- Fix: 0.1.2 renamed the app from `OpenVPN` to `OpenVPN_VPN` but did not update
+  the sidecar path in the tun probe, so it still launched the netstack sidecar
+  from `/usr/local/packages/OpenVPN/lib`. The `execl` failed on every connect,
+  so from 0.1.2 onward the tunnel came up and reported connected while carrying
+  no traffic: the transparent forwarders, the inbound SOCKS5 proxy and the
+  outbound proxies never ran, and the client logged
+  `TUN write exception: Connection refused`. 0.1.0 and 0.1.1 were unaffected.
+- A failed sidecar launch is now logged instead of exiting silently.
+- The probe and sidecar log as `OpenVPN_VPN`, so their output appears in the
+  app log alongside the bridge instead of under a separate `OpenVPN` tag, which
+  is why the failure left no visible trace.
+
 ## [0.1.3] - 2026-08-19 - Configurable forwarded ports
 
 - The directly forwarded ports are now configurable instead of fixed at 80, 443,

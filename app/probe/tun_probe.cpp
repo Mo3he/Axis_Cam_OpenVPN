@@ -41,7 +41,7 @@ using namespace openvpn;
 namespace {
 
 const char *g_status_path = nullptr;
-const char *SIDECAR = "/usr/local/packages/OpenVPN/lib/netstack_proxy";
+const char *SIDECAR = "/usr/local/packages/OpenVPN_VPN/lib/netstack_proxy";
 
 std::string g_http_port = "8080";
 std::string g_socks_port = "1080";
@@ -131,6 +131,7 @@ class VPNClient : public ClientAPI::OpenVPNClient {
             execl(SIDECAR, "netstack_proxy", "3", vpn_cidr_.c_str(),
                   std::to_string(mtu_).c_str(), g_http_port.c_str(),
                   g_socks_port.c_str(), g_forward_ports.c_str(), (char *)nullptr);
+            syslog(LOG_ERR, "execl %s failed: %s", SIDECAR, strerror(errno));
             _exit(127);
         }
         sidecar_pid_ = pid;
@@ -206,7 +207,7 @@ void load_ports(const char *path) {
 } // namespace
 
 int main(int argc, char **argv) {
-    openlog("OpenVPN", LOG_PID, LOG_USER);
+    openlog("OpenVPN_VPN", LOG_PID, LOG_USER);
     signal(SIGPIPE, SIG_IGN);
     // Become a process-group leader so the bridge can kill this client AND its
     // netstack sidecar together (kill(-pgid)), preventing orphaned sidecars
