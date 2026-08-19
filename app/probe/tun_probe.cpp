@@ -45,6 +45,7 @@ const char *SIDECAR = "/usr/local/packages/OpenVPN/lib/netstack_proxy";
 
 std::string g_http_port = "8080";
 std::string g_socks_port = "1080";
+std::string g_forward_ports = "80,443,554";
 
 std::mutex g_status_mtx;
 std::string g_state = "starting", g_vpn_ip4, g_last_event, g_last_error;
@@ -129,7 +130,7 @@ class VPNClient : public ClientAPI::OpenVPNClient {
             if (fds[1] > 3) close(fds[1]);
             execl(SIDECAR, "netstack_proxy", "3", vpn_cidr_.c_str(),
                   std::to_string(mtu_).c_str(), g_http_port.c_str(),
-                  g_socks_port.c_str(), (char *)nullptr);
+                  g_socks_port.c_str(), g_forward_ports.c_str(), (char *)nullptr);
             _exit(127);
         }
         sidecar_pid_ = pid;
@@ -198,6 +199,7 @@ void load_ports(const char *path) {
         if (v.empty()) continue;
         if (k == "HTTP_PORT") g_http_port = v;
         else if (k == "SOCKS_PORT") g_socks_port = v;
+        else if (k == "FORWARD_PORTS") g_forward_ports = v;
     }
 }
 

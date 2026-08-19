@@ -121,6 +121,7 @@
             <div class="row2">
                 <div class="settings-row"><label class="settings-label" for="httpPort">Outbound HTTP proxy port</label><input class="settings-input" id="httpPort" type="text" placeholder="8080" autocomplete="off"></div>
                 <div class="settings-row"><label class="settings-label" for="socksPort">Outbound SOCKS5 port</label><input class="settings-input" id="socksPort" type="text" placeholder="1080" autocomplete="off"></div>
+                <div class="settings-row"><label class="settings-label" for="forwardPorts">Forwarded ports</label><input class="settings-input" id="forwardPorts" type="text" placeholder="80,443,554" autocomplete="off" spellcheck="false"></div>
             </div>
             <div class="settings-actions">
                 <span class="save-status" id="savestatus"></span>
@@ -237,6 +238,7 @@
         if (typeof obj.Username === 'string') document.getElementById('user').value = obj.Username;
         if (typeof obj.HttpProxyPort === 'string') document.getElementById('httpPort').value = obj.HttpProxyPort;
         if (typeof obj.Socks5Port === 'string') document.getElementById('socksPort').value = obj.Socks5Port;
+        if (typeof obj.ForwardPorts === 'string') document.getElementById('forwardPorts').value = obj.ForwardPorts;
     }
 
     fetch(PARAM + '?action=list&group=' + GROUP, { cache:'no-store' })
@@ -244,7 +246,7 @@
         .then(function (t) {
             var g = function (k) { var m = t.match(new RegExp('\\.' + k + '=(.*)')); return m ? m[1].trim() : null; };
             if (g('Username') === null && g('HttpProxyPort') === null && g('Socks5Port') === null) return Promise.reject();
-            applyParams({ Username: g('Username') || '', HttpProxyPort: g('HttpProxyPort') || '', Socks5Port: g('Socks5Port') || '' });
+            applyParams({ Username: g('Username') || '', HttpProxyPort: g('HttpProxyPort') || '', Socks5Port: g('Socks5Port') || '', ForwardPorts: g('ForwardPorts') || '' });
         })
         .catch(function () {
             fetch(API_SETTINGS + '?_=' + Date.now(), { cache:'no-store' })
@@ -269,16 +271,19 @@
         var pw = document.getElementById('pass').value;
         var hp = document.getElementById('httpPort').value || '8080';
         var sp = document.getElementById('socksPort').value || '1080';
+        var fp = document.getElementById('forwardPorts').value.trim() || '80,443,554';
 
         var cgiBody = 'action=update'
             + '&' + GROUP + '.Username=' + encodeURIComponent(u)
             + '&' + GROUP + '.Password=' + encodeURIComponent(pw)
             + '&' + GROUP + '.HttpProxyPort=' + encodeURIComponent(hp)
-            + '&' + GROUP + '.Socks5Port=' + encodeURIComponent(sp);
+            + '&' + GROUP + '.Socks5Port=' + encodeURIComponent(sp)
+            + '&' + GROUP + '.ForwardPorts=' + encodeURIComponent(fp);
         var apiBody = 'Username=' + encodeURIComponent(u)
             + '&Password=' + encodeURIComponent(pw)
             + '&HttpProxyPort=' + encodeURIComponent(hp)
-            + '&Socks5Port=' + encodeURIComponent(sp);
+            + '&Socks5Port=' + encodeURIComponent(sp)
+            + '&ForwardPorts=' + encodeURIComponent(fp);
 
         function postProfile() {
             if (!profile) return Promise.resolve('OK');

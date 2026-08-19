@@ -60,6 +60,7 @@ static char *cfg_username   = NULL;
 static char *cfg_password   = NULL;
 static char *cfg_http_port  = NULL;
 static char *cfg_socks_port = NULL;
+static char *cfg_forward_ports = NULL;
 
 static void cache_set(char **field, const char *value) {
     if (!value) return;
@@ -144,6 +145,7 @@ static void load_config_cache(AXParameter *handle) {
     LOAD("Password",      cfg_password)
     LOAD("HttpProxyPort", cfg_http_port)
     LOAD("Socks5Port",    cfg_socks_port)
+    LOAD("ForwardPorts",  cfg_forward_ports)
 #undef LOAD
 }
 
@@ -161,9 +163,10 @@ static void write_side_config(void) {
     }
     f = fopen(PORTS_FILE, "w");
     if (f) {
-        fprintf(f, "HTTP_PORT=%s\nSOCKS_PORT=%s\n",
+        fprintf(f, "HTTP_PORT=%s\nSOCKS_PORT=%s\nFORWARD_PORTS=%s\n",
                 cache_get(&cfg_http_port, "8080"),
-                cache_get(&cfg_socks_port, "1080"));
+                cache_get(&cfg_socks_port, "1080"),
+                cache_get(&cfg_forward_ports, "80,443,554"));
         fclose(f);
         chmod(PORTS_FILE, 0644);
     }
@@ -193,6 +196,7 @@ static void parameter_changed(const gchar *name, const gchar *value,
     else if (strcmp(short_name, "Password")      == 0) cache_set(&cfg_password,   value);
     else if (strcmp(short_name, "HttpProxyPort") == 0) cache_set(&cfg_http_port,  value);
     else if (strcmp(short_name, "Socks5Port")    == 0) cache_set(&cfg_socks_port, value);
+    else if (strcmp(short_name, "ForwardPorts")  == 0) cache_set(&cfg_forward_ports, value);
     schedule_restart();
 }
 
@@ -241,7 +245,7 @@ static void write_profile_file(const char *body, size_t len) {
  * them on devices that do not serve /axis-cgi/param.cgi. */
 
 static const char *http_param_names[] = {
-    "Username", "Password", "HttpProxyPort", "Socks5Port"
+    "Username", "Password", "HttpProxyPort", "Socks5Port", "ForwardPorts"
 };
 
 static int http_is_known_param(const char *name) {
@@ -254,8 +258,7 @@ static void http_cache_set_by_name(const char *name, const char *value) {
     if      (strcmp(name, "Username")      == 0) cache_set(&cfg_username,   value);
     else if (strcmp(name, "Password")      == 0) cache_set(&cfg_password,   value);
     else if (strcmp(name, "HttpProxyPort") == 0) cache_set(&cfg_http_port,  value);
-    else if (strcmp(name, "Socks5Port")    == 0) cache_set(&cfg_socks_port, value);
-}
+    else if (strcmp(name, "Socks5Port")    == 0) cache_set(&cfg_socks_port, value);    else if (strcmp(name, "ForwardPorts")  == 0) cache_set(&cfg_forward_ports, value);}
 
 static void http_json_append_escaped(GString *out, const char *s) {
     for (const char *p = s; *p; p++) {
@@ -484,7 +487,7 @@ int main(void) {
     /* client.ovpn is NOT rewritten here — it persists from a prior HTTP upload. */
     start_client();
 
-    const char *params[] = {"Username", "Password", "HttpProxyPort", "Socks5Port"};
+    const char *params[] = {"Username", "Password", "HttpProxyPort", "Socks5Port", "ForwardPorts"};
     for (size_t i = 0; i < sizeof(params) / sizeof(params[0]); i++) {
         if (!ax_parameter_register_callback(handle, params[i], parameter_changed,
                                             handle, &error)) {

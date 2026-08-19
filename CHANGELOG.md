@@ -5,6 +5,13 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.1.3] - 2026-08-19 - Configurable forwarded ports
+
+- The directly forwarded ports are now configurable instead of fixed at 80, 443,
+  and 554. Add port 22 to reach SSH over the VPN, or any other camera service.
+  Set them under **Forwarded ports** in Settings, or through the `ForwardPorts`
+  parameter. Up to 16 ports; clearing the field restores the default.
+
 ## [0.1.2] - 2026-07-24 - Fix broken app name and save settings without param.cgi
 
 - Fix: the app package name in the bridge and web UI did not match the manifest

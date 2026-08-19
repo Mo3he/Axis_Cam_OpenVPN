@@ -8,7 +8,7 @@
             "vendorId": "70ee172dd9",
             "vendorUrl": "https://github.com/Mo3he",
             "runMode": "respawn",
-            "version": "0.1.2",
+            "version": "0.1.3",
             "user": {
                 "group": "sdk",
                 "username": "sdk"
@@ -31,7 +31,8 @@
                 {"name": "Username",      "default": "",     "type": "string"},
                 {"name": "Password",      "default": "",     "type": "string"},
                 {"name": "HttpProxyPort", "default": "8080", "type": "string"},
-                {"name": "Socks5Port",    "default": "1080", "type": "string"}
+                {"name": "Socks5Port",    "default": "1080", "type": "string"},
+                {"name": "ForwardPorts",  "default": "80,443,554", "type": "string"}
             ]
         }
     }

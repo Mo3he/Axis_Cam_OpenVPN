@@ -42,8 +42,33 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 )
 
-// transparentPorts are forwarded directly: VPN-IP:port -> 127.0.0.1:port.
-var transparentPorts = []int{80, 443, 554}
+// defaultForwardPorts are forwarded directly: VPN-IP:port -> 127.0.0.1:port.
+var defaultForwardPorts = []int{80, 443, 554}
+
+// maxForwardPorts caps how many listeners a config can ask for.
+const maxForwardPorts = 16
+
+// parseForwardPorts turns a comma-separated list into unique valid ports,
+// falling back to the defaults when nothing usable is configured.
+func parseForwardPorts(value string) []int {
+	ports := make([]int, 0, maxForwardPorts)
+	seen := make(map[int]bool, maxForwardPorts)
+	for _, field := range strings.Split(value, ",") {
+		port, err := strconv.Atoi(strings.TrimSpace(field))
+		if err != nil || port < 1 || port > 65535 || seen[port] {
+			continue
+		}
+		seen[port] = true
+		ports = append(ports, port)
+		if len(ports) == maxForwardPorts {
+			break
+		}
+	}
+	if len(ports) == 0 {
+		return defaultForwardPorts
+	}
+	return ports
+}
 
 // inboundSOCKS5Port is the SOCKS5 port on the VPN interface (netstack side).
 const inboundSOCKS5Port = 1080
@@ -473,6 +498,10 @@ func main() {
 	mtu := parsePort(os.Args[3], 1500)
 	httpPort := parsePort(os.Args[4], 8080)
 	socksOutPort := parsePort(os.Args[5], 1080)
+	forwardPorts := defaultForwardPorts
+	if len(os.Args) > 6 {
+		forwardPorts = parseForwardPorts(os.Args[6])
+	}
 
 	prefix, err := netip.ParsePrefix(clientCIDR)
 	if err != nil {
@@ -496,7 +525,7 @@ func main() {
 	t := &tunnel{tnet: tnet, stopCh: make(chan struct{})}
 	t.pump(dev, fd, mtu)
 
-	for _, port := range transparentPorts {
+	for _, port := range forwardPorts {
 		t.wg.Add(1)
 		go t.runTCPProxy(localAddr, port, fmt.Sprintf("127.0.0.1:%d", port))
 	}
