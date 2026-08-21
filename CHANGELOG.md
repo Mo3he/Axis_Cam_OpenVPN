@@ -5,6 +5,10 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 3.11.7 - 2026-08-21
+
+- Update to upstream 3.11.7.
+
 ## [0.1.4] - 2026-08-19 - Fix the userspace data plane, broken since 0.1.2
 
 - Fix: 0.1.2 renamed the app from `OpenVPN` to `OpenVPN_VPN` but did not update

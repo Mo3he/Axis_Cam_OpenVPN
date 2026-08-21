@@ -1,39 +1,61 @@
 {
-    "schemaVersion": "2.0.0",
-    "acapPackageConf": {
-        "setup": {
-            "friendlyName": "OpenVPN VPN",
-            "appName": "OpenVPN_VPN",
-            "vendor": "moshe@mohome.net",
-            "vendorId": "70ee172dd9",
-            "vendorUrl": "https://github.com/Mo3he",
-            "runMode": "respawn",
-            "version": "0.1.4",
-            "user": {
-                "group": "sdk",
-                "username": "sdk"
-            },
-            "architecture": "BUILDARCH",
-            "compatibleOsVersions": [
-                { "max": "13" }
-            ]
-        },
-        "configuration": {
-            "settingPage": "index.html",
-            "reverseProxy": [
-                {
-                    "apiPath": "api",
-                    "target": "http://localhost:2204/",
-                    "access": "admin"
-                }
-            ],
-            "paramConfig": [
-                {"name": "Username",      "default": "",     "type": "string"},
-                {"name": "Password",      "default": "",     "type": "string"},
-                {"name": "HttpProxyPort", "default": "8080", "type": "string"},
-                {"name": "Socks5Port",    "default": "1080", "type": "string"},
-                {"name": "ForwardPorts",  "default": "80,443,554", "type": "string"}
-            ]
+  "schemaVersion": "2.0.0",
+  "acapPackageConf": {
+    "setup": {
+      "friendlyName": "OpenVPN VPN",
+      "appName": "OpenVPN_VPN",
+      "vendor": "moshe@mohome.net",
+      "vendorId": "70ee172dd9",
+      "vendorUrl": "https://github.com/Mo3he",
+      "runMode": "respawn",
+      "version": "3.11.7",
+      "user": {
+        "group": "sdk",
+        "username": "sdk"
+      },
+      "architecture": "BUILDARCH",
+      "compatibleOsVersions": [
+        {
+          "max": "13"
         }
+      ]
+    },
+    "configuration": {
+      "settingPage": "index.html",
+      "reverseProxy": [
+        {
+          "apiPath": "api",
+          "target": "http://localhost:2204/",
+          "access": "admin"
+        }
+      ],
+      "paramConfig": [
+        {
+          "name": "Username",
+          "default": "",
+          "type": "string"
+        },
+        {
+          "name": "Password",
+          "default": "",
+          "type": "string"
+        },
+        {
+          "name": "HttpProxyPort",
+          "default": "8080",
+          "type": "string"
+        },
+        {
+          "name": "Socks5Port",
+          "default": "1080",
+          "type": "string"
+        },
+        {
+          "name": "ForwardPorts",
+          "default": "80,443,554",
+          "type": "string"
+        }
+      ]
     }
+  }
 }
