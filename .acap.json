@@ -1,0 +1,31 @@
+{
+  "app": "OpenVPN_VPN",
+  "friendlyName": "OpenVPN VPN",
+  "versionPolicy": "mirror",
+  "upstream": {
+    "type": "github-tag",
+    "repo": "OpenVPN/openvpn3",
+    "tagPattern": "^release/[0-9]+\\.[0-9]+\\.[0-9]+$",
+    "strip": "release/",
+    "note": "Pin moves from the release/3.11 branch to the exact release/X.Y.Z tag.",
+    "name": "OpenVPN3 Core",
+    "changesUrl": "https://github.com/OpenVPN/openvpn3/tree/release/${UPSTREAM}"
+  },
+  "build": {
+    "command": "./build.sh",
+    "env": {}
+  },
+  "pins": [
+    {
+      "file": "Dockerfile.openvpn3",
+      "arg": "OPENVPN3_VERSION",
+      "prefix": "release/"
+    }
+  ],
+  "signing": {
+    "skip": [
+      "*_acap3.eap",
+      "*_root.eap"
+    ]
+  }
+}

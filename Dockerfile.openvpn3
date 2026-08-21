@@ -26,7 +26,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── fetch sources (pinned) ─────────────────────────────────────────────────
-ARG OPENVPN3_VERSION=release/3.11
+ARG OPENVPN3_VERSION=release/3.11.7
 ARG ASIO_VERSION=asio-1-30-2
 ARG LZ4_VERSION=v1.9.4
 # Match the SDK 12.10 sysroot OpenSSL (3.5.6). We build it static so tun_probe
