@@ -6,7 +6,9 @@ ARG ARCH=aarch64
 ARG OVPN3_BASE=openvpn3-base-${ARCH}
 
 # ── Go build stage: the userspace netstack + proxy sidecar ─────────────────
-FROM docker.io/golang:1.22 AS gobuilder
+# Go 1.22 is end-of-life; govulncheck found 4 reachable stdlib vulnerabilities
+# (net, net/url, syscall) in binaries it produced.
+FROM docker.io/golang:1.25.5 AS gobuilder
 ARG ARCH
 ENV CGO_ENABLED=0
 COPY ./app/netstack /src/netstack
