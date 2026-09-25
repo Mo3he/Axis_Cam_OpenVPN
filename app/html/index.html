@@ -229,9 +229,7 @@
             }).catch(function () {});
     }
 
-    // Load current small params into the form. Uses param.cgi when available
-    // and falls back to the app's own endpoint on devices that do not serve it
-    // (e.g. recorder/NVR and access-control products).
+    // param.cgi first; devices without it (e.g. NVRs) fall back to the app endpoint.
     var API_SETTINGS = 'api/settings';
 
     function applyParams(obj) {
@@ -294,7 +292,7 @@
         fetch(PARAM, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:cgiBody })
             .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
             .catch(function () {
-                // param.cgi unavailable — use the app's settings endpoint.
+                // param.cgi unavailable: use the app's settings endpoint.
                 return fetch(API_SETTINGS, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:apiBody })
                     .then(function (r) { return r.ok ? r.text() : Promise.reject(); });
             })

@@ -1,7 +1,5 @@
-# Builds the ACAP main program (C param bridge). The OpenVPN3 client binary
-# (lib/tun_probe) and the Go netstack sidecar (lib/netstack_proxy) are
-# cross-compiled separately in the Dockerfile and are already present in lib/
-# by the time acap-build runs this Makefile.
+# Builds only the C param bridge; lib/tun_probe and lib/netstack_proxy are
+# prebuilt by the Dockerfile before acap-build runs this.
 
 PROG      = OpenVPN_VPN
 BRIDGE_SRC = openvpn_bridge.c

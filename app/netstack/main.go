@@ -1,23 +1,12 @@
 // Copyright (C) 2026  Mo3he
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Userspace netstack + proxy sidecar for the OpenVPN ACAP.
+// Userspace netstack + proxy sidecar for the OpenVPN ACAP. tun_probe hands us a
+// SOCK_DGRAM socketpair fd (one datagram == one decrypted IP packet); a gVisor
+// netstack on it (wireguard's helper, used only for stack setup) runs the same
+// forwarders and proxies as the WireGuard ACAP. No kernel TUN, no root.
 //
-// The OpenVPN3 client (tun_probe, C++) terminates the tunnel in userspace and
-// hands us one end of a SOCK_DGRAM socketpair carrying decrypted IP packets
-// (one datagram == one IP packet), passed as inherited file descriptor 3. This
-// process attaches a gVisor netstack to that fd (via wireguard's netstack
-// helper, reused purely for its stack setup) and runs the same proxy/forwarder
-// layer as the WireGuard ACAP:
-//
-//   - Transparent TCP forwarders for camera ports 80/443/554 (VPN peer -> camera)
-//   - Inbound SOCKS5 on <vpn-ip>:1080 (VPN peer -> any camera port)
-//   - Outbound HTTP CONNECT on 127.0.0.1:8080 (camera -> VPN/internet)
-//   - Outbound SOCKS5 on 127.0.0.1:1080 (camera -> VPN/internet)
-//
-// No kernel TUN, no root: the "tun" is just the socketpair fd.
-//
-// Args: netstack_proxy <tun_fd> <client_cidr> <mtu> <http_port> <socks_port>
+// Args: netstack_proxy <tun_fd> <client_cidr> <mtu> <http_port> <socks_port> [forward_ports]
 
 package main
 
@@ -48,8 +37,7 @@ var defaultForwardPorts = []int{80, 443, 554}
 // maxForwardPorts caps how many listeners a config can ask for.
 const maxForwardPorts = 16
 
-// parseForwardPorts turns a comma-separated list into unique valid ports,
-// falling back to the defaults when nothing usable is configured.
+// parseForwardPorts returns up to maxForwardPorts unique valid ports, or the defaults if none.
 func parseForwardPorts(value string) []int {
 	ports := make([]int, 0, maxForwardPorts)
 	seen := make(map[int]bool, maxForwardPorts)
@@ -88,9 +76,7 @@ func parsePort(s string, def int) int {
 	return def
 }
 
-// pump copies IP packets between the OpenVPN socketpair fd and the netstack tun
-// device. fd -> device is inbound (decrypted packets into the stack); device ->
-// fd is outbound (stack packets to be encrypted by OpenVPN).
+// pump copies IP packets both ways between the OpenVPN socketpair fd and the netstack device.
 func (t *tunnel) pump(dev tun.Device, fd *os.File, mtu int) {
 	// inbound: fd -> netstack
 	t.wg.Add(1)
@@ -271,8 +257,7 @@ func handleInboundSOCKS5(c net.Conn) {
 	<-done
 }
 
-// dialViaVPN resolves hostport via the host DNS resolver, then connects through
-// the netstack so traffic exits via the VPN tunnel.
+// dialViaVPN resolves with the host DNS (the netstack has none) and dials through the tunnel.
 func (t *tunnel) dialViaVPN(ctx context.Context, hostport string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {

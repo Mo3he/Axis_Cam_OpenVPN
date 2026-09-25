@@ -2,26 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /*
- * ACAP parameter bridge for the OpenVPN userspace VPN.
- *
- * The OpenVPN .ovpn profile (with inline certs, several KB) is too large and
- * multi-line for the ACAP parameter store, so it is uploaded through a tiny
- * embedded HTTP server (127.0.0.1:2204) exposed via the manifest reverseProxy
- * at /local/OpenVPN_VPN/api/. The web UI POSTs the profile there; the bridge
- * writes it to client.ovpn (persisted in localdata) and restarts the client.
- *
- * The same server also serves GET/POST /api/settings, a fallback the web UI
- * uses to read and write the small axparameter settings on devices that do not
- * expose /axis-cgi/param.cgi (e.g. recorder/NVR and access-control products).
- *
- * Small settings come through axparameter:
- *   Username/Password  - creds for non-autologin profiles
- *   HttpProxyPort      - outbound HTTP CONNECT proxy port (default 8080)
- *   Socks5Port         - outbound SOCKS5 proxy port (default 1080)
- *
- * The bridge launches the OpenVPN3 client (lib/tun_probe), which terminates the
- * tunnel in userspace and spawns the netstack sidecar. Runs as the unprivileged
- * 'sdk' ACAP user, no root.
+ * ACAP parameter bridge for the OpenVPN userspace client (lib/tun_probe). The
+ * .ovpn profile is too large for axparameter, so it is uploaded via an embedded
+ * HTTP server (manifest reverseProxy) and kept in localdata. Small settings use
+ * axparameter, with /api/settings as a fallback where param.cgi is missing.
  */
 
 #include <axsdk/axparameter.h>
@@ -149,9 +133,8 @@ static void load_config_cache(AXParameter *handle) {
 #undef LOAD
 }
 
-/* Write the (small) creds + ports files. The profile lives in client.ovpn,
- * written by the HTTP upload endpoint and persisted in localdata; we never
- * overwrite it here so an uploaded profile survives restarts. */
+/* Never touches client.ovpn: only the upload endpoint writes it, so an uploaded
+ * profile survives restarts. */
 static void write_side_config(void) {
     mkdir(STATE_DIR, 0755);
     FILE *f = fopen(CREDS_FILE, "w");
@@ -201,8 +184,7 @@ static void parameter_changed(const gchar *name, const gchar *value,
 }
 
 /* ── embedded HTTP upload server (127.0.0.1:HTTP_PORT) ────────────────────── */
-/* POST .../profile  body = raw .ovpn text  → write client.ovpn, restart client.
- * GET  .../profile  → returns the current profile length (for the UI).       */
+/* POST .../profile stores a raw .ovpn body; GET .../profile returns its size. */
 
 static size_t http_content_length(const char *hdr, size_t hlen) {
     const char *key = "content-length:";
@@ -240,9 +222,7 @@ static void write_profile_file(const char *body, size_t len) {
     syslog(LOG_INFO, "profile uploaded (%zu bytes) via http", len);
 }
 
-/* ── settings fallback (GET/POST /api/settings) ──────────────────────────────
- * Read/write the small axparameter settings directly, so the web UI can manage
- * them on devices that do not serve /axis-cgi/param.cgi. */
+/* ── settings fallback for devices without param.cgi (GET/POST /api/settings) ── */
 
 static const char *http_param_names[] = {
     "Username", "Password", "HttpProxyPort", "Socks5Port", "ForwardPorts"
@@ -382,7 +362,7 @@ static gboolean http_on_incoming(GSocketService *service G_GNUC_UNUSED,
             }
         }
         if (have_headers && req->len - header_end >= content_length) break;
-        if (req->len > 1048576) break; /* 1 MB cap */
+        if (req->len > 1048576) break;
     }
 
     int is_get = g_str_has_prefix(req->str, "GET ");
@@ -484,7 +464,6 @@ int main(void) {
 
     load_config_cache(handle);
     write_side_config();
-    /* client.ovpn is NOT rewritten here — it persists from a prior HTTP upload. */
     start_client();
 
     const char *params[] = {"Username", "Password", "HttpProxyPort", "Socks5Port", "ForwardPorts"};

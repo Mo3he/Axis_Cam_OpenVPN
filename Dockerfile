@@ -1,13 +1,9 @@
 ARG ARCH=aarch64
-# The openvpn3-base image (Dockerfile.openvpn3) provides the OpenVPN3 source
-# tree at /src/openvpn3, asio at /src/deps/asio, static lz4 at /opt/ovpn3-deps,
-# and the cross toolchain at /opt/ovpn3/toolchain.cmake. Declared here (global,
-# before any FROM) so the builder-stage FROM can resolve it.
+# Base image from Dockerfile.openvpn3 (OpenVPN3 tree, asio, static deps, toolchain).
+# Declared before any FROM so the builder-stage FROM can resolve it.
 ARG OVPN3_BASE=openvpn3-base-${ARCH}
 
 # ── Go build stage: the userspace netstack + proxy sidecar ─────────────────
-# Go 1.22 is end-of-life; govulncheck found 4 reachable stdlib vulnerabilities
-# (net, net/url, syscall) in binaries it produced.
 FROM docker.io/golang:1.27.1 AS gobuilder
 ARG ARCH
 ENV CGO_ENABLED=0
@@ -25,19 +21,12 @@ FROM ${OVPN3_BASE} AS builder
 ARG ARCH
 
 # ── build the OpenVPN3 client (tun_probe) ──────────────────────────────────
-# Copy ONLY the probe source first so this expensive compile is cached across
-# changes to the UI / manifest / bridge / sidecar. The core cannot be a
-# standalone lib, so we add tun_probe as a target inside the openvpn3 tree
-# (mirroring the ovpncli sample: same core deps + xkey PKI helper) and compile
-# it together with the core. USE_TUN_BUILDER routes packets to our
-# TunBuilderBase callbacks instead of a kernel /dev/net/tun.
+# Copy only the probe source first so this slow compile stays cached. The core
+# can't be a standalone lib, so tun_probe is added as a target in the openvpn3
+# tree; USE_TUN_BUILDER routes packets to our TunBuilderBase callbacks.
 COPY ./app/probe /opt/app/probe
-# The SDK 12.10 OpenSSL (libcrypto/libssl) is built with the GCC 13 / glibc 2.38
-# C23 redirect, so it imports __isoc23_strtol / __isoc23_strtoul / __isoc23_sscanf
-# @ GLIBC_2.38. Linking OpenSSL hoists those symbols into tun_probe's dynsym and
-# would cap the floor at OS 12.10 (glibc 2.38) even though the binary is otherwise
-# OS 13 ready. isoc23_compat.c defines local forwarders that satisfy those
-# references with the plain GLIBC_2.17 symbols, restoring the OS 11 floor.
+# isoc23_compat.c satisfies __isoc23_* @ GLIBC_2.38 references so tun_probe
+# still loads below OS 12.10.
 RUN cp /opt/app/probe/tun_probe.cpp /src/openvpn3/test/ovpncli/tun_probe.cpp && \
     cp /opt/app/probe/isoc23_compat.c /src/openvpn3/test/ovpncli/isoc23_compat.c && \
     { \
@@ -50,10 +39,8 @@ RUN cp /opt/app/probe/tun_probe.cpp /src/openvpn3/test/ovpncli/tun_probe.cpp && 
     } >> /src/openvpn3/test/ovpncli/CMakeLists.txt
 
 ARG MAKE_JOBS=1
-# PKG_CONFIG_PATH points OpenVPN3's pkg_check_modules(openssl) at our static
-# OpenSSL 3.5; PKG_CONFIG_SYSROOT_DIR is cleared so the .pc's absolute
-# /opt/ovpn3-deps paths are used verbatim (not re-prefixed with the sysroot).
-# Only libcrypto.a/libssl.a exist there, so the linker statically bundles them.
+# Point pkg-config at the static OpenSSL; an empty PKG_CONFIG_SYSROOT_DIR keeps
+# the .pc's absolute /opt/ovpn3-deps paths from being re-prefixed with the sysroot.
 RUN . /opt/axis/acapsdk/environment-setup* && \
     cd /src/openvpn3 && \
     PKG_CONFIG_PATH=/opt/ovpn3-deps/lib/pkgconfig PKG_CONFIG_SYSROOT_DIR= \
@@ -71,8 +58,6 @@ RUN . /opt/axis/acapsdk/environment-setup* && \
     ls -l /opt/app/lib/tun_probe
 
 # ── build + package the ACAP ───────────────────────────────────────────────
-# The Makefile builds only the small C bridge; lib/tun_probe (C++) and
-# lib/netstack_proxy (Go) are prebuilt and copied in here.
 COPY ./app /opt/app/
 COPY --from=gobuilder /netstack_proxy /opt/app/lib/netstack_proxy
 WORKDIR /opt/app

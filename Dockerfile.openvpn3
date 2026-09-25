@@ -1,14 +1,6 @@
-# Pre-built OpenVPN3 source + deps base image for Axis ACAP 11+ (aarch64 / armv7hf).
-#
-# This image only PREPARES the cross-compile environment: it clones the OpenVPN3
-# core and asio, builds a static lz4, and writes the cmake cross toolchain. The
-# actual probe binary is compiled in the app Dockerfile (FROM this image),
-# because the OpenVPN3 core cannot be built as a standalone static library (its
-# sources depend on per-target compile defines), so it must be compiled together
-# with our probe target.
-#
-# Build once, reuse on every app rebuild (only rebuilt when the pinned versions
-# below change):
+# OpenVPN3 source + static deps base image for the app Dockerfile (aarch64 / armv7hf).
+# Only prepares the cross-compile environment: the OpenVPN3 core can't be built as
+# a standalone library, so tun_probe is compiled against it in the app Dockerfile.
 #
 #   podman build --build-arg ARCH=aarch64 -t openvpn3-base-aarch64 -f Dockerfile.openvpn3 .
 
@@ -29,10 +21,8 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 ARG OPENVPN3_VERSION=release/3.11.7
 ARG ASIO_VERSION=asio-1-30-2
 ARG LZ4_VERSION=v1.9.4
-# Match the SDK 12.10 sysroot OpenSSL (3.5.6). We build it static so tun_probe
-# does NOT depend on the device's OpenSSL: the sysroot ships only OpenSSL 3.5
-# shared libs, whose symbols carry OPENSSL_3.4.0+ version tags that AXIS OS <
-# 12.10 (OpenSSL 3.0) lacks -> dynamic linking would cap the floor at 12.10.
+# Static OpenSSL, same version as the sysroot: the sysroot's shared libs carry
+# OPENSSL_3.4.0+ symbol versions that AXIS OS < 12.10 (OpenSSL 3.0) lacks.
 ARG OPENSSL_VERSION=openssl-3.5.6
 
 WORKDIR /src
@@ -55,12 +45,9 @@ RUN . /opt/axis/acapsdk/environment-setup* && \
        /src/deps/lz4/lib/lz4frame.h /opt/ovpn3-deps/include/
 
 # ── cross-compile OpenSSL 3.5 (static) ────────────────────────────────────
-# Installs libcrypto.a / libssl.a + headers + .pc files into /opt/ovpn3-deps so
-# the app-stage cmake links OpenSSL statically (see PKG_CONFIG_PATH there).
-# no-shared/no-module/no-dso keep the providers built-in (no runtime .so load).
-# -std=gnu11 keeps the GCC 13 C23 redirect off so OpenSSL's own strtol/sscanf
-# bind the plain GLIBC_2.17 symbols (belt-and-suspenders with the tun_probe
-# isoc23 shim), preserving the glibc 2.34 floor too.
+# Installs static libs, headers and .pc files into /opt/ovpn3-deps for the app
+# stage. no-shared/no-module/no-dso keep the providers built in; -std=gnu11 keeps
+# the C23 redirect off so OpenSSL binds the plain GLIBC_2.17 strtol/sscanf.
 RUN . /opt/axis/acapsdk/environment-setup* && \
     unset CROSS_COMPILE && \
     CC_BIN=$(echo $CC | awk '{print $1}') && \
@@ -80,13 +67,9 @@ RUN . /opt/axis/acapsdk/environment-setup* && \
     make install_dev
 
 # ── cmake cross toolchain file (stable path for the app stage) ─────────────
-# Capture the ACAP SDK's FULL compiler invocation (binary + flags incl.
-# --sysroot) and CFLAGS/CXXFLAGS/LDFLAGS, so the cmake build links against the
-# same glibc/OpenSSL as the sysroot. Reconstructing the toolchain from just the
-# compiler basename drops --sysroot and causes glibc symbol mismatches
-# (e.g. libcrypto.so needing __isoc23_strtol@GLIBC_2.38).
-# FIND_ROOT_PATH_MODE_*=BOTH so cmake can also see our out-of-sysroot deps
-# (asio headers, lz4 static lib) which we additionally pin via -D cache vars.
+# Use the SDK's full compiler invocation (incl. --sysroot) and flags: rebuilding it
+# from the compiler basename drops --sysroot and causes glibc symbol mismatches.
+# FIND_ROOT_PATH_MODE_*=BOTH also finds the out-of-sysroot deps (asio, lz4).
 RUN . /opt/axis/acapsdk/environment-setup* && \
     mkdir -p /opt/ovpn3 && \
     CC_BIN=$(echo $CC | awk '{print $1}') && \
