@@ -10,6 +10,7 @@
 
 #include <axsdk/axparameter.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <gio/gio.h>
 #include <glib-unix.h>
 #include <signal.h>
@@ -133,16 +134,25 @@ static void load_config_cache(AXParameter *handle) {
 #undef LOAD
 }
 
+/* Owner-only from creation; fchmod also tightens a file left by older builds. */
+static FILE *fopen_private(const char *path) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    if (fd < 0) return NULL;
+    fchmod(fd, 0600);
+    FILE *f = fdopen(fd, "w");
+    if (!f) close(fd);
+    return f;
+}
+
 /* Never touches client.ovpn: only the upload endpoint writes it, so an uploaded
  * profile survives restarts. */
 static void write_side_config(void) {
     mkdir(STATE_DIR, 0755);
-    FILE *f = fopen(CREDS_FILE, "w");
+    FILE *f = fopen_private(CREDS_FILE);
     if (f) {
         fprintf(f, "%s\n%s\n", cache_get(&cfg_username, ""),
                 cache_get(&cfg_password, ""));
         fclose(f);
-        chmod(CREDS_FILE, 0600);
     }
     f = fopen(PORTS_FILE, "w");
     if (f) {
@@ -211,14 +221,13 @@ static void http_send(GOutputStream *out, const char *status,
 
 static void write_profile_file(const char *body, size_t len) {
     mkdir(STATE_DIR, 0755);
-    FILE *f = fopen(OVPN_FILE, "w");
+    FILE *f = fopen_private(OVPN_FILE);
     if (!f) {
         syslog(LOG_ERR, "cannot write %s: %s", OVPN_FILE, strerror(errno));
         return;
     }
     fwrite(body, 1, len, f);
     fclose(f);
-    chmod(OVPN_FILE, 0600);
     syslog(LOG_INFO, "profile uploaded (%zu bytes) via http", len);
 }
 
