@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	golang.org/x/crypto v0.58.0
-	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f
+	golang.zx2c4.com/wireguard v0.0.0-20261024220952-b3bc704ef0ee
 )
 
 require (
