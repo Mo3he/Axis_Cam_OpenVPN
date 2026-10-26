@@ -4,7 +4,7 @@ ARG ARCH=aarch64
 ARG OVPN3_BASE=openvpn3-base-${ARCH}
 
 # ── Go build stage: the userspace netstack + proxy sidecar ─────────────────
-FROM docker.io/golang:1.27.2 AS gobuilder
+FROM docker.io/golang:1.27.3 AS gobuilder
 ARG ARCH
 ENV CGO_ENABLED=0
 COPY ./app/netstack /src/netstack
