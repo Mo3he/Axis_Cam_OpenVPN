@@ -5,6 +5,13 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+- Build with Go 1.27.3 and update the bundled wireguard-go and Go
+  dependencies.
+- The minimum AXIS OS version (12.10.68) is now declared explicitly. It is
+  the same floor SDK 12.10.0 already set, so nothing changes for users.
+
 ## 3.11.8 - 2026-10-26
 
 - Update to upstream 3.11.8.
