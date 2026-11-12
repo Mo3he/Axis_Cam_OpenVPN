@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+- Fix HTTPS over the tunnel on AXIS OS 13. Its web server answers `127.0.0.1`
+  in plain HTTP on every port, 443 included, so HTTPS to the camera through
+  the tunnel failed. Forwarded ports and the inbound SOCKS5 proxy now connect
+  to `[::1]`, which every AXIS OS version serves like the network (with TLS on
+  443), and fall back to `127.0.0.1` for services that listen only there (such
+  as port 80 on an HTTPS-only device).
 - Build with Go 1.27.3 and update the bundled wireguard-go and Go
   dependencies.
 - The minimum AXIS OS version (12.10.68) is now declared explicitly. It is
