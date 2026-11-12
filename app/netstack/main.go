@@ -31,7 +31,7 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 )
 
-// defaultForwardPorts are forwarded directly: VPN-IP:port -> camera port.
+// defaultForwardPorts are forwarded directly: VPN-IP:port -> 127.0.0.1:port.
 var defaultForwardPorts = []int{80, 443, 554}
 
 // maxForwardPorts caps how many listeners a config can ask for.
@@ -130,8 +130,8 @@ func (t *tunnel) pump(dev tun.Device, fd *os.File, mtu int) {
 }
 
 // runTCPProxy listens on localAddr:port inside the netstack and forwards each
-// accepted connection to the same camera port.
-func (t *tunnel) runTCPProxy(localAddr netip.Addr, port int) {
+// accepted connection to dstAddr on the host.
+func (t *tunnel) runTCPProxy(localAddr netip.Addr, port int, dstAddr string) {
 	defer t.wg.Done()
 	listenAddr := net.TCPAddrFromAddrPort(netip.AddrPortFrom(localAddr, uint16(port)))
 	ln, err := t.tnet.ListenTCP(listenAddr)
@@ -140,7 +140,7 @@ func (t *tunnel) runTCPProxy(localAddr netip.Addr, port int) {
 		return
 	}
 	go func() { <-t.stopCh; _ = ln.Close() }()
-	slog.Info("transparent forwarder ready", "listen", listenAddr, "dst", net.JoinHostPort(cameraHost, strconv.Itoa(port)))
+	slog.Info("transparent forwarder ready", "listen", listenAddr, "dst", dstAddr)
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -152,13 +152,13 @@ func (t *tunnel) runTCPProxy(localAddr netip.Addr, port int) {
 				continue
 			}
 		}
-		go relay(c, port)
+		go relay(c, dstAddr)
 	}
 }
 
-func relay(src net.Conn, port int) {
+func relay(src net.Conn, dst string) {
 	defer src.Close()
-	dstConn, err := dialCamera(port, true)
+	dstConn, err := net.DialTimeout("tcp", dst, 10*time.Second)
 	if err != nil {
 		return
 	}
@@ -169,8 +169,8 @@ func relay(src net.Conn, port int) {
 	<-done
 }
 
-// runInboundSOCKS5 listens on the VPN IP and forwards SOCKS5 CONNECT to the
-// requested camera port (VPN peer -> any camera port).
+// runInboundSOCKS5 listens on the VPN IP and forwards SOCKS5 CONNECT to
+// 127.0.0.1:<requested-port> on the host (VPN peer -> any camera port).
 func (t *tunnel) runInboundSOCKS5(localAddr netip.Addr, port int) {
 	defer t.wg.Done()
 	listenAddr := net.TCPAddrFromAddrPort(netip.AddrPortFrom(localAddr, uint16(port)))
@@ -197,7 +197,7 @@ func (t *tunnel) runInboundSOCKS5(localAddr netip.Addr, port int) {
 }
 
 // handleInboundSOCKS5 implements SOCKS5 CONNECT (RFC 1928); the destination host
-// is always replaced with the camera so it can only reach local camera services.
+// is always replaced with 127.0.0.1 so it can only reach local camera services.
 func handleInboundSOCKS5(c net.Conn) {
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(30 * time.Second))
@@ -242,14 +242,15 @@ func handleInboundSOCKS5(c net.Conn) {
 		_, _ = c.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
+	dst := fmt.Sprintf("127.0.0.1:%d", port)
 	_ = c.SetDeadline(time.Time{})
-	dstConn, err := dialCamera(int(port), false)
+	dstConn, err := net.DialTimeout("tcp", dst, 10*time.Second)
 	if err != nil {
 		_, _ = c.Write([]byte{0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	defer dstConn.Close()
-	_, _ = c.Write([]byte{0x05, 0x00, 0x00, 0x01, 127, 0, 0, 2, byte(port >> 8), byte(port)})
+	_, _ = c.Write([]byte{0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, byte(port >> 8), byte(port)})
 	done := make(chan struct{}, 2)
 	go func() { _, _ = io.Copy(dstConn, c); done <- struct{}{} }()
 	go func() { _, _ = io.Copy(c, dstConn); done <- struct{}{} }()
@@ -511,7 +512,7 @@ func main() {
 
 	for _, port := range forwardPorts {
 		t.wg.Add(1)
-		go t.runTCPProxy(localAddr, port)
+		go t.runTCPProxy(localAddr, port, fmt.Sprintf("127.0.0.1:%d", port))
 	}
 	t.wg.Add(1)
 	go t.runInboundSOCKS5(localAddr, inboundSOCKS5Port)
