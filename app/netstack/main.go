@@ -158,7 +158,7 @@ func (t *tunnel) runTCPProxy(localAddr netip.Addr, port int) {
 
 func relay(src net.Conn, port int) {
 	defer src.Close()
-	dstConn, err := dialCamera(port)
+	dstConn, err := dialCamera(port, forwardFallback)
 	if err != nil {
 		return
 	}
@@ -243,7 +243,7 @@ func handleInboundSOCKS5(c net.Conn) {
 		return
 	}
 	_ = c.SetDeadline(time.Time{})
-	dstConn, err := dialCamera(int(port))
+	dstConn, err := dialCamera(int(port), socksFallback)
 	if err != nil {
 		_, _ = c.Write([]byte{0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
