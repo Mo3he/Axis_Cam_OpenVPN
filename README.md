@@ -56,7 +56,7 @@ web interface under **Apps -> Add app**.
 Open the app's settings page and:
 
 1. Paste your `.ovpn` profile (inline certs supported) or pick a file.
-2. Add **Username/Password** only if your profile is not autologin.
+2. Add **Username/Password** only if your profile is not autologin. The password is never shown again or returned by the API; leave the field blank to keep it, or clear the username to remove both.
 3. Optionally change the outbound proxy ports (defaults 8080 / 1080) to avoid
    clashing with other VPN ACAPs.
 4. **Save & Restart**.
