@@ -5,6 +5,14 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+- The password is no longer returned by the settings API or shown by
+  `param.cgi`; the API reports `PasswordSet` instead.
+- Saving settings with the password field blank keeps the saved password.
+  Before, changing any setting in the web page erased it. Clearing the
+  username removes both.
+
 ## 3.11.9 - 2026-11-13
 
 - Update to upstream 3.11.8.

@@ -237,6 +237,7 @@
         if (typeof obj.HttpProxyPort === 'string') document.getElementById('httpPort').value = obj.HttpProxyPort;
         if (typeof obj.Socks5Port === 'string') document.getElementById('socksPort').value = obj.Socks5Port;
         if (typeof obj.ForwardPorts === 'string') document.getElementById('forwardPorts').value = obj.ForwardPorts;
+        document.getElementById('pass').placeholder = obj.PasswordSet ? 'Saved (leave blank to keep)' : '';
     }
 
     fetch(PARAM + '?action=list&group=' + GROUP, { cache:'no-store' })
@@ -244,7 +245,7 @@
         .then(function (t) {
             var g = function (k) { var m = t.match(new RegExp('\\.' + k + '=(.*)')); return m ? m[1].trim() : null; };
             if (g('Username') === null && g('HttpProxyPort') === null && g('Socks5Port') === null) return Promise.reject();
-            applyParams({ Username: g('Username') || '', HttpProxyPort: g('HttpProxyPort') || '', Socks5Port: g('Socks5Port') || '', ForwardPorts: g('ForwardPorts') || '' });
+            applyParams({ Username: g('Username') || '', HttpProxyPort: g('HttpProxyPort') || '', Socks5Port: g('Socks5Port') || '', ForwardPorts: g('ForwardPorts') || '', PasswordSet: !!g('Password') });
         })
         .catch(function () {
             fetch(API_SETTINGS + '?_=' + Date.now(), { cache:'no-store' })
@@ -271,14 +272,16 @@
         var sp = document.getElementById('socksPort').value || '1080';
         var fp = document.getElementById('forwardPorts').value.trim() || '80,443,554';
 
+        // A blank password keeps the saved one; clearing the username clears both.
+        var sendPw = pw !== '' || u === '';
         var cgiBody = 'action=update'
             + '&' + GROUP + '.Username=' + encodeURIComponent(u)
-            + '&' + GROUP + '.Password=' + encodeURIComponent(pw)
+            + (sendPw ? '&' + GROUP + '.Password=' + encodeURIComponent(pw) : '')
             + '&' + GROUP + '.HttpProxyPort=' + encodeURIComponent(hp)
             + '&' + GROUP + '.Socks5Port=' + encodeURIComponent(sp)
             + '&' + GROUP + '.ForwardPorts=' + encodeURIComponent(fp);
         var apiBody = 'Username=' + encodeURIComponent(u)
-            + '&Password=' + encodeURIComponent(pw)
+            + (sendPw ? '&Password=' + encodeURIComponent(pw) : '')
             + '&HttpProxyPort=' + encodeURIComponent(hp)
             + '&Socks5Port=' + encodeURIComponent(sp)
             + '&ForwardPorts=' + encodeURIComponent(fp);
@@ -297,7 +300,12 @@
                     .then(function (r) { return r.ok ? r.text() : Promise.reject(); });
             })
             .then(function () { return postProfile(); })
-            .then(function (tx) { st.className = /OK/i.test(tx) ? 'save-status ok' : 'save-status err';
+            .then(function (tx) {
+                                  if (/OK/i.test(tx) && sendPw) {
+                                      document.getElementById('pass').value = '';
+                                      document.getElementById('pass').placeholder = pw ? 'Saved (leave blank to keep)' : '';
+                                  }
+                                  st.className = /OK/i.test(tx) ? 'save-status ok' : 'save-status err';
                                   st.textContent = /OK/i.test(tx) ? 'Saved. Restarting...' : ('Error: ' + tx); })
             .catch(function (e) { st.className = 'save-status err'; st.textContent = 'Error: ' + (e || 'save failed'); });
     });

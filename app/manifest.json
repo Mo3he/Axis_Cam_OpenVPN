@@ -39,7 +39,7 @@
         {
           "name": "Password",
           "default": "",
-          "type": "string"
+          "type": "password"
         },
         {
           "name": "HttpProxyPort",

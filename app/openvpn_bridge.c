@@ -277,6 +277,13 @@ static gchar *http_build_settings_json(void) {
             val = g_strdup("");
         }
         if (i) g_string_append_c(out, ',');
+        /* The password is never sent back; PasswordSet says whether one is stored. */
+        if (strcmp(http_param_names[i], "Password") == 0) {
+            g_string_append_printf(out, "\"Password\":\"\",\"PasswordSet\":%s",
+                                   (val && *val) ? "true" : "false");
+            g_free(val);
+            continue;
+        }
         g_string_append_printf(out, "\"%s\":\"", http_param_names[i]);
         http_json_append_escaped(out, val ? val : "");
         g_string_append_c(out, '"');
